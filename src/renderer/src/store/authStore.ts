@@ -20,8 +20,8 @@ export const useAuthStore = create<AuthState>()(
       can: (minRole: UserRole) => {
         const { user } = get()
         if (!user) return false
-        const levels: Record<UserRole, number> = { store_manager: 0, director: 1, super_admin: 2 }
-        return levels[user.role] >= levels[minRole]
+        const levels: Record<string, number> = { store_manager: 0, director: 1, super_admin: 2, viewer: 0, editor: 1, admin: 2 }
+        return (levels[user.role] ?? 0) >= levels[minRole]
       },
       canAccessDepartment: (department_id: number) => {
         const { user } = get()
