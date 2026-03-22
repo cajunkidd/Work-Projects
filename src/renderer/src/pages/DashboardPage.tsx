@@ -3,8 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import {
   AreaChart,
   Area,
-  BarChart,
-  Bar,
   PieChart,
   Pie,
   Cell,
@@ -32,6 +30,135 @@ const STATUS_COLORS = {
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
+
+type BreakdownItem = BudgetSummary & { type: 'branch' | 'department' }
+
+function BudgetBreakdownPanel({ items }: { items: BreakdownItem[] }) {
+  const sort = (arr: BreakdownItem[]) =>
+    [...arr].sort((a, b) => {
+      const pA = a.total_budget > 0 ? a.total_spent / a.total_budget : 0
+      const pB = b.total_budget > 0 ? b.total_spent / b.total_budget : 0
+      return pB - pA
+    })
+
+  const branches = sort(items.filter((i) => i.type === 'branch'))
+  const depts = sort(items.filter((i) => i.type === 'department'))
+  const showHeaders = branches.length > 0 && depts.length > 0
+
+  const renderRow = (item: BreakdownItem) => {
+    const pct = item.total_budget > 0 ? Math.min((item.total_spent / item.total_budget) * 100, 100) : 0
+    const over = item.total_budget > 0 && item.total_spent > item.total_budget
+    const near = !over && pct >= 70
+    const barColor = over ? '#ef4444' : near ? '#f59e0b' : '#10b981'
+    const remaining = item.total_budget - item.total_spent
+    const noBudget = item.total_budget === 0
+    const name = item.type === 'branch'
+      ? `#${item.branch_number ?? ''} – ${item.branch_name}`
+      : item.department_name
+
+    return (
+      <div
+        key={`${item.type}-${item.branch_id ?? item.department_id}`}
+        className="grid grid-cols-12 items-center gap-3 py-2.5 border-b border-slate-800 last:border-0"
+      >
+        {/* Name + type badge */}
+        <div className="col-span-3 flex items-center gap-2 min-w-0">
+          <span className="text-white text-sm font-medium truncate">{name}</span>
+          <span className={`shrink-0 text-xs px-1.5 py-0.5 rounded font-medium ${
+            item.type === 'branch' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'
+          }`}>
+            {item.type === 'branch' ? 'Branch' : 'Dept'}
+          </span>
+        </div>
+
+        {/* Progress bar + % */}
+        <div className="col-span-4 flex items-center gap-2">
+          <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full"
+              style={{ width: noBudget ? '0%' : `${pct}%`, background: barColor }}
+            />
+          </div>
+          <span className="text-slate-300 text-xs w-8 text-right shrink-0">
+            {noBudget ? '—' : `${Math.round(pct)}%`}
+          </span>
+        </div>
+
+        {/* Spent / Budget */}
+        <div className="col-span-2 text-right">
+          {noBudget ? (
+            <span className="text-slate-500 text-xs">No budget</span>
+          ) : (
+            <>
+              <span className="text-white text-xs font-medium">{fmt(item.total_spent)}</span>
+              <span className="text-slate-500 text-xs"> / {fmt(item.total_budget)}</span>
+            </>
+          )}
+        </div>
+
+        {/* Remaining */}
+        <div className="col-span-2 text-right">
+          {noBudget ? (
+            <span className="text-slate-500 text-xs">—</span>
+          ) : (
+            <span className={`text-xs font-medium ${remaining >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {remaining >= 0 ? `${fmt(remaining)} left` : `${fmt(Math.abs(remaining))} over`}
+            </span>
+          )}
+        </div>
+
+        {/* Status badge */}
+        <div className="col-span-1 flex justify-end">
+          {noBudget ? (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700 text-slate-400 whitespace-nowrap">No Budget</span>
+          ) : over ? (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-red-900/50 text-red-300 font-medium whitespace-nowrap">Over Budget</span>
+          ) : near ? (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-amber-900/50 text-amber-300 font-medium whitespace-nowrap">Near Limit</span>
+          ) : (
+            <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-900/50 text-emerald-300 font-medium whitespace-nowrap">Within Budget</span>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Card>
+      <p className="text-white font-semibold mb-4">Budget Breakdown</p>
+      {items.length === 0 ? (
+        <p className="text-slate-400 text-sm">No budget data available</p>
+      ) : (
+        <>
+          {/* Column headers */}
+          <div className="grid grid-cols-12 gap-3 pb-2 border-b border-slate-700 mb-1">
+            <span className="col-span-3 text-slate-500 text-xs uppercase tracking-wide">Name</span>
+            <span className="col-span-4 text-slate-500 text-xs uppercase tracking-wide">Utilization</span>
+            <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide text-right">Spent / Budget</span>
+            <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide text-right">Remaining</span>
+            <span className="col-span-1 text-slate-500 text-xs uppercase tracking-wide text-right">Status</span>
+          </div>
+
+          {showHeaders && branches.length > 0 && (
+            <>
+              <p className="text-slate-500 text-xs uppercase tracking-wide mt-3 mb-1">Store Branches</p>
+              {branches.map(renderRow)}
+            </>
+          )}
+          {!showHeaders && branches.map(renderRow)}
+
+          {showHeaders && depts.length > 0 && (
+            <>
+              <p className="text-slate-500 text-xs uppercase tracking-wide mt-4 mb-1">Departments</p>
+              {depts.map(renderRow)}
+            </>
+          )}
+          {!showHeaders && depts.map(renderRow)}
+        </>
+      )}
+    </Card>
+  )
 }
 
 function BudgetGauge({ summary }: { summary: BudgetSummary }) {
@@ -169,7 +296,13 @@ export default function DashboardPage() {
       <div>
         <h1 className="text-white text-2xl font-bold">Dashboard</h1>
         <p className="text-slate-400 text-sm">
-          {selectedDeptId ? 'Department view' : 'Company overview'} · FY {year}
+          {user?.role === 'store_manager'
+            ? `Your branches · FY ${year}`
+            : user?.role === 'director'
+              ? `Your departments & branches · FY ${year}`
+              : selectedDeptId
+                ? `Department view · FY ${year}`
+                : `Company overview · FY ${year}`}
         </p>
       </div>
 
@@ -256,33 +389,14 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Department budget bars (super_admin and director) */}
-      {deptBudgets.length > 0 && user?.role !== 'store_manager' && (
-        <Card>
-          <p className="text-white font-semibold mb-4">Department Budget Utilization</p>
-          <ResponsiveContainer width="100%" height={Math.max(120, deptBudgets.length * 36)}>
-            <BarChart data={deptBudgets} layout="vertical">
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
-              <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <YAxis type="category" dataKey="department_name" tick={{ fill: '#94a3b8', fontSize: 11 }} width={80} />
-              <Tooltip formatter={(v: number) => [fmt(v)]} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-              <Bar dataKey="total_spent" name="Spent" fill={brandPrimary} radius={[0, 4, 4, 0]} />
-              <Bar dataKey="total_budget" name="Budget" fill="#1e293b" radius={[0, 4, 4, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </Card>
-      )}
-
-      {/* Branch budget gauges */}
-      {branchBudgets.length > 0 && (
-        <Card>
-          <p className="text-white font-semibold mb-4">Store Branch Budget Utilization</p>
-          <div className="flex flex-wrap gap-6 justify-start">
-            {branchBudgets.map((s) => (
-              <BudgetGauge key={`branch-${s.branch_id}`} summary={s} />
-            ))}
-          </div>
-        </Card>
+      {/* Budget Breakdown — all roles see their accessible entities */}
+      {(branchBudgets.length > 0 || deptBudgets.length > 0) && (
+        <BudgetBreakdownPanel
+          items={[
+            ...branchBudgets.map((s) => ({ ...s, type: 'branch' as const })),
+            ...deptBudgets.map((s) => ({ ...s, type: 'department' as const }))
+          ]}
+        />
       )}
 
       {/* Bottom row: Upcoming renewals + recent invoices + projects */}

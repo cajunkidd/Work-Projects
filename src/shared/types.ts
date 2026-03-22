@@ -50,6 +50,7 @@ export interface BudgetSummary {
   department_name: string | null
   branch_id: number | null
   branch_name: string | null
+  branch_number?: number | null
   fiscal_year: number
   total_budget: number
   total_spent: number
