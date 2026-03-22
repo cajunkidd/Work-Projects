@@ -184,26 +184,24 @@ export function registerBudgetHandlers(): void {
           })
         }
 
-        // Per-department summaries (super_admin sees all; director sees own dept)
+        // Per-department summaries (super_admin sees all; director sees own depts)
         if (role === 'super_admin' || role === 'director') {
           const deptRows = db
             .prepare(
               `SELECT
-                b.department_id,
+                d.id as department_id,
                 d.name as department_name,
-                b.fiscal_year,
-                b.total_amount as total_budget,
+                COALESCE(b.total_amount, 0) as total_budget,
                 COALESCE(
                   (SELECT SUM(c.annual_cost)
                    FROM contracts c
-                   WHERE c.department_id = b.department_id
+                   WHERE c.department_id = d.id
                    AND c.status != 'expired'
                    AND strftime('%Y', c.start_date) <= ? AND strftime('%Y', c.end_date) >= ?),
                   0
                 ) as total_spent
-              FROM budget b
-              LEFT JOIN departments d ON b.department_id = d.id
-              WHERE b.department_id IS NOT NULL AND b.branch_id IS NULL AND b.fiscal_year = ?
+              FROM departments d
+              LEFT JOIN budget b ON b.department_id = d.id AND b.branch_id IS NULL AND b.fiscal_year = ?
               ORDER BY d.name`
             )
             .all(String(fiscal_year), String(fiscal_year), fiscal_year) as any[]
@@ -215,7 +213,7 @@ export function registerBudgetHandlers(): void {
               department_name: r.department_name,
               branch_id: null,
               branch_name: null,
-              fiscal_year: r.fiscal_year,
+              fiscal_year,
               total_budget: r.total_budget,
               total_spent: r.total_spent,
               remaining: r.total_budget - r.total_spent
@@ -227,22 +225,20 @@ export function registerBudgetHandlers(): void {
         const branchRows = db
           .prepare(
             `SELECT
-              b.branch_id,
+              br.id as branch_id,
               br.number as branch_number,
               br.name as branch_name,
-              b.fiscal_year,
-              b.total_amount as total_budget,
+              COALESCE(b.total_amount, 0) as total_budget,
               COALESCE(
                 (SELECT SUM(c.annual_cost)
                  FROM contracts c
-                 WHERE c.branch_id = b.branch_id
+                 WHERE c.branch_id = br.id
                  AND c.status != 'expired'
                  AND strftime('%Y', c.start_date) <= ? AND strftime('%Y', c.end_date) >= ?),
                 0
               ) as total_spent
-            FROM budget b
-            LEFT JOIN branches br ON b.branch_id = br.id
-            WHERE b.branch_id IS NOT NULL AND b.fiscal_year = ?
+            FROM branches br
+            LEFT JOIN budget b ON b.branch_id = br.id AND b.fiscal_year = ?
             ORDER BY br.number`
           )
           .all(String(fiscal_year), String(fiscal_year), fiscal_year) as any[]
@@ -255,7 +251,8 @@ export function registerBudgetHandlers(): void {
             department_name: null,
             branch_id: r.branch_id,
             branch_name: r.branch_name,
-            fiscal_year: r.fiscal_year,
+            branch_number: r.branch_number,
+            fiscal_year,
             total_budget: r.total_budget,
             total_spent: r.total_spent,
             remaining: r.total_budget - r.total_spent
