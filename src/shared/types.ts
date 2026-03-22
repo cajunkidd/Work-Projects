@@ -1,0 +1,173 @@
+// ─── Users & Auth ───────────────────────────────────────────────────────────
+
+export type UserRole = 'admin' | 'editor' | 'viewer'
+
+export interface User {
+  id: number
+  name: string
+  email: string
+  role: UserRole
+  department_ids: number[] // empty = access all
+  created_at: string
+}
+
+export interface LoginCredentials {
+  email: string
+  password: string
+}
+
+// ─── Departments ────────────────────────────────────────────────────────────
+
+export interface Department {
+  id: number
+  name: string
+  created_at: string
+}
+
+// ─── Budget ─────────────────────────────────────────────────────────────────
+
+export interface Budget {
+  id: number
+  department_id: number | null // null = company-level
+  fiscal_year: number
+  total_amount: number
+  created_at: string
+}
+
+export interface BudgetSummary {
+  department_id: number | null
+  department_name: string | null
+  fiscal_year: number
+  total_budget: number
+  total_spent: number
+  remaining: number
+}
+
+// ─── Contracts ──────────────────────────────────────────────────────────────
+
+export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'pending'
+
+export interface Contract {
+  id: number
+  vendor_name: string
+  status: ContractStatus
+  start_date: string
+  end_date: string
+  monthly_cost: number
+  annual_cost: number
+  total_cost: number
+  poc_name: string
+  poc_email: string
+  poc_phone: string
+  department_id: number
+  department_name?: string
+  file_path?: string
+  notes_count?: number
+  created_at: string
+  days_until_renewal?: number
+}
+
+export interface ContractLineItem {
+  id: number
+  contract_id: number
+  description: string
+  quantity: number
+  unit_price: number
+  total_price: number
+}
+
+export interface RenewalHistory {
+  id: number
+  contract_id: number
+  renewal_date: string
+  prev_cost: number
+  new_cost: number
+  license_count_change: number
+  reason: string
+}
+
+// ─── Competitor Offerings ───────────────────────────────────────────────────
+
+export interface CompetitorOffering {
+  id: number
+  contract_id: number
+  competitor_vendor: string
+  offering_name: string
+  price: number
+  file_path?: string
+  notes: string
+  created_at: string
+}
+
+// ─── Invoices ───────────────────────────────────────────────────────────────
+
+export interface Invoice {
+  id: number
+  contract_id: number | null
+  vendor_name?: string
+  gmail_message_id: string
+  subject: string
+  sender: string
+  amount: number
+  budgeted_amount: number
+  received_date: string
+  is_deleted: number
+}
+
+// ─── Vendor Projects ────────────────────────────────────────────────────────
+
+export type ProjectStatus = 'active' | 'on_hold' | 'completed'
+
+export interface VendorProject {
+  id: number
+  contract_id: number
+  name: string
+  status: ProjectStatus
+  start_date: string
+  end_date: string
+  description: string
+}
+
+// ─── Vendor Notes ────────────────────────────────────────────────────────────
+
+export interface VendorNote {
+  id: number
+  contract_id: number
+  note: string
+  created_by: string
+  created_at: string
+}
+
+// ─── App Settings ────────────────────────────────────────────────────────────
+
+export interface AppSettings {
+  logo_path?: string
+  brand_primary?: string
+  brand_secondary?: string
+  brand_accent?: string
+  brand_light?: string
+  brand_dark?: string
+  db_network_path?: string
+  gmail_connected?: string
+  gmail_email?: string
+}
+
+// ─── Dashboard ───────────────────────────────────────────────────────────────
+
+export interface DashboardMetrics {
+  budget_summary: BudgetSummary
+  dept_budgets: BudgetSummary[]
+  contract_status_counts: { status: ContractStatus; count: number }[]
+  upcoming_renewals: Contract[]
+  recent_invoices: Invoice[]
+  monthly_spend: { month: string; amount: number; department?: string }[]
+  active_projects_count: number
+}
+
+// ─── IPC Response ────────────────────────────────────────────────────────────
+
+export interface IpcResponse<T = unknown> {
+  success: boolean
+  data?: T
+  error?: string
+}

@@ -1,0 +1,512 @@
+import { useEffect, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts'
+import { useAuthStore } from '../store/authStore'
+import { useThemeStore } from '../store/themeStore'
+import Card from '../components/ui/Card'
+import Badge from '../components/ui/Badge'
+import Button from '../components/ui/Button'
+import Modal from '../components/ui/Modal'
+import Input from '../components/ui/Input'
+import Select from '../components/ui/Select'
+import RoleGuard from '../components/layout/RoleGuard'
+import type {
+  Contract, ContractLineItem, RenewalHistory, VendorNote, VendorProject, CompetitorOffering
+} from '../../../shared/types'
+
+const tabs = ['Overview', 'Line Items', 'Renewals', 'Notes', 'Projects', 'Competitors']
+
+function fmt(n: number) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
+}
+
+export default function ContractDetailPage() {
+  const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
+  const { user } = useAuthStore()
+  const { brandPrimary } = useThemeStore()
+  const contractId = parseInt(id!)
+
+  const [contract, setContract] = useState<Contract | null>(null)
+  const [activeTab, setActiveTab] = useState('Overview')
+  const [lineItems, setLineItems] = useState<ContractLineItem[]>([])
+  const [renewals, setRenewals] = useState<RenewalHistory[]>([])
+  const [notes, setNotes] = useState<VendorNote[]>([])
+  const [projects, setProjects] = useState<VendorProject[]>([])
+  const [competitors, setCompetitors] = useState<CompetitorOffering[]>([])
+
+  // Modals
+  const [showRenewalModal, setShowRenewalModal] = useState(false)
+  const [showNoteModal, setShowNoteModal] = useState(false)
+  const [showProjectModal, setShowProjectModal] = useState(false)
+  const [showCompetitorModal, setShowCompetitorModal] = useState(false)
+
+  // Forms
+  const [renewalForm, setRenewalForm] = useState({ renewal_date: '', prev_cost: '', new_cost: '', license_count_change: '0', reason: '' })
+  const [noteText, setNoteText] = useState('')
+  const [projectForm, setProjectForm] = useState({ name: '', status: 'active', start_date: '', end_date: '', description: '' })
+  const [competitorForm, setCompetitorForm] = useState({ competitor_vendor: '', offering_name: '', price: '', notes: '' })
+
+  useEffect(() => {
+    window.api.contracts.get(contractId).then((res) => {
+      if (res.success && res.data) setContract(res.data)
+    })
+    window.api.lineItems.list(contractId).then((res) => {
+      if (res.success && res.data) setLineItems(res.data)
+    })
+    window.api.renewals.list(contractId).then((res) => {
+      if (res.success && res.data) setRenewals(res.data)
+    })
+    window.api.notes.list(contractId).then((res) => {
+      if (res.success && res.data) setNotes(res.data)
+    })
+    window.api.projects.list({ contract_id: contractId }).then((res) => {
+      if (res.success && res.data) setProjects(res.data)
+    })
+    window.api.competitors.list(contractId).then((res) => {
+      if (res.success && res.data) setCompetitors(res.data)
+    })
+  }, [contractId])
+
+  const saveLineItems = async () => {
+    await window.api.lineItems.upsert(lineItems)
+    const res = await window.api.lineItems.list(contractId)
+    if (res.success && res.data) setLineItems(res.data)
+  }
+
+  const addLineItem = () => {
+    setLineItems((prev) => [...prev, { id: 0, contract_id: contractId, description: '', quantity: 1, unit_price: 0, total_price: 0 }])
+  }
+
+  const updateLineItem = (i: number, key: keyof ContractLineItem, value: string | number) => {
+    setLineItems((prev) => {
+      const next = [...prev]
+      next[i] = { ...next[i], [key]: value }
+      if (key === 'quantity' || key === 'unit_price') {
+        next[i].total_price = next[i].quantity * next[i].unit_price
+      }
+      return next
+    })
+  }
+
+  const deleteLineItem = async (i: number, item: ContractLineItem) => {
+    if (item.id) await window.api.lineItems.delete(item.id)
+    setLineItems((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
+  const saveRenewal = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await window.api.renewals.create({
+      contract_id: contractId,
+      renewal_date: renewalForm.renewal_date,
+      prev_cost: parseFloat(renewalForm.prev_cost) || 0,
+      new_cost: parseFloat(renewalForm.new_cost) || 0,
+      license_count_change: parseInt(renewalForm.license_count_change) || 0,
+      reason: renewalForm.reason
+    })
+    const res = await window.api.renewals.list(contractId)
+    if (res.success && res.data) setRenewals(res.data)
+    setShowRenewalModal(false)
+    setRenewalForm({ renewal_date: '', prev_cost: '', new_cost: '', license_count_change: '0', reason: '' })
+  }
+
+  const saveNote = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await window.api.notes.create({ contract_id: contractId, note: noteText, created_by: user?.name || 'Unknown' })
+    const res = await window.api.notes.list(contractId)
+    if (res.success && res.data) setNotes(res.data)
+    setShowNoteModal(false)
+    setNoteText('')
+  }
+
+  const saveProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await window.api.projects.create({ contract_id: contractId, ...projectForm } as any)
+    const res = await window.api.projects.list({ contract_id: contractId })
+    if (res.success && res.data) setProjects(res.data)
+    setShowProjectModal(false)
+    setProjectForm({ name: '', status: 'active', start_date: '', end_date: '', description: '' })
+  }
+
+  const saveCompetitor = async (e: React.FormEvent) => {
+    e.preventDefault()
+    await window.api.competitors.create({
+      contract_id: contractId,
+      competitor_vendor: competitorForm.competitor_vendor,
+      offering_name: competitorForm.offering_name,
+      price: parseFloat(competitorForm.price) || 0,
+      notes: competitorForm.notes
+    })
+    const res = await window.api.competitors.list(contractId)
+    if (res.success && res.data) setCompetitors(res.data)
+    setShowCompetitorModal(false)
+    setCompetitorForm({ competitor_vendor: '', offering_name: '', price: '', notes: '' })
+  }
+
+  if (!contract) {
+    return <div className="text-slate-400 text-center py-20">Loading...</div>
+  }
+
+  const renewalTrendData = [...renewals].reverse().map((r) => ({
+    date: r.renewal_date,
+    cost: r.new_cost
+  }))
+  if (contract.annual_cost) {
+    renewalTrendData.unshift({ date: contract.start_date, cost: contract.annual_cost })
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <button onClick={() => navigate('/contracts')} className="text-slate-400 hover:text-white text-sm mb-2 flex items-center gap-1">
+            ← Back to Contracts
+          </button>
+          <h1 className="text-white text-2xl font-bold">{contract.vendor_name}</h1>
+          <div className="flex items-center gap-2 mt-1">
+            <Badge variant={contract.status === 'active' ? 'success' : contract.status === 'expiring_soon' ? 'warning' : 'danger'}>
+              {contract.status.replace('_', ' ')}
+            </Badge>
+            <span className="text-slate-400 text-sm">{contract.department_name}</span>
+            {contract.days_until_renewal !== undefined && contract.days_until_renewal >= 0 && (
+              <span className="text-slate-400 text-sm">· {contract.days_until_renewal} days to renewal</span>
+            )}
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-white text-2xl font-bold">{fmt(contract.annual_cost)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
+          <p className="text-slate-400">{fmt(contract.monthly_cost)}/mo</p>
+        </div>
+      </div>
+
+      {/* Quick info */}
+      <div className="grid grid-cols-4 gap-4">
+        {[
+          { label: 'Start Date', value: contract.start_date },
+          { label: 'End Date', value: contract.end_date },
+          { label: 'POC', value: contract.poc_name || '—' },
+          { label: 'Total Value', value: fmt(contract.total_cost) }
+        ].map((item) => (
+          <Card key={item.label}>
+            <p className="text-slate-400 text-xs">{item.label}</p>
+            <p className="text-white font-semibold mt-0.5">{item.value}</p>
+          </Card>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-800">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === tab
+                ? 'text-white border-current'
+                : 'text-slate-400 hover:text-white border-transparent'
+            }`}
+            style={activeTab === tab ? { borderColor: brandPrimary, color: 'white' } : {}}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'Overview' && (
+        <Card>
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-3">
+              <h3 className="text-white font-semibold">Vendor Contact</h3>
+              <div className="space-y-2 text-sm">
+                <div><span className="text-slate-400">Name: </span><span className="text-white">{contract.poc_name || '—'}</span></div>
+                <div><span className="text-slate-400">Email: </span><span className="text-white">{contract.poc_email || '—'}</span></div>
+                <div><span className="text-slate-400">Phone: </span><span className="text-white">{contract.poc_phone || '—'}</span></div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-white font-semibold">Contract File</h3>
+              {contract.file_path ? (
+                <p className="text-slate-300 text-sm truncate">{contract.file_path}</p>
+              ) : (
+                <p className="text-slate-400 text-sm">No file attached</p>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === 'Line Items' && (
+        <div className="space-y-4">
+          <RoleGuard minRole="editor">
+            <div className="flex gap-2">
+              <Button variant="secondary" onClick={addLineItem}>+ Add Line Item</Button>
+              <Button onClick={saveLineItems}>Save Changes</Button>
+            </div>
+          </RoleGuard>
+          <Card>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-slate-400 text-left border-b border-slate-800">
+                  <th className="pb-2 font-medium">Description</th>
+                  <th className="pb-2 font-medium w-24">Quantity</th>
+                  <th className="pb-2 font-medium w-32">Unit Price</th>
+                  <th className="pb-2 font-medium w-32">Total</th>
+                  <th className="pb-2 w-10"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {lineItems.map((item, i) => (
+                  <tr key={i} className="border-b border-slate-800/50 last:border-0">
+                    <td className="py-2 pr-4">
+                      <input
+                        className="bg-transparent text-white w-full focus:outline-none border-b border-transparent focus:border-slate-600"
+                        value={item.description}
+                        onChange={(e) => updateLineItem(i, 'description', e.target.value)}
+                        placeholder="Description..."
+                      />
+                    </td>
+                    <td className="py-2 pr-4">
+                      <input
+                        className="bg-transparent text-white w-full focus:outline-none border-b border-transparent focus:border-slate-600"
+                        type="number"
+                        value={item.quantity}
+                        onChange={(e) => updateLineItem(i, 'quantity', parseFloat(e.target.value) || 0)}
+                      />
+                    </td>
+                    <td className="py-2 pr-4">
+                      <input
+                        className="bg-transparent text-white w-full focus:outline-none border-b border-transparent focus:border-slate-600"
+                        type="number"
+                        value={item.unit_price}
+                        onChange={(e) => updateLineItem(i, 'unit_price', parseFloat(e.target.value) || 0)}
+                      />
+                    </td>
+                    <td className="py-2 text-white">{fmt(item.total_price)}</td>
+                    <td className="py-2">
+                      <RoleGuard minRole="editor">
+                        <button onClick={() => deleteLineItem(i, item)} className="text-slate-500 hover:text-red-400 text-lg">×</button>
+                      </RoleGuard>
+                    </td>
+                  </tr>
+                ))}
+                {lineItems.length === 0 && (
+                  <tr><td colSpan={5} className="py-6 text-slate-400 text-center">No line items. Add one above.</td></tr>
+                )}
+              </tbody>
+              {lineItems.length > 0 && (
+                <tfoot>
+                  <tr className="border-t border-slate-700">
+                    <td colSpan={3} className="pt-2 text-right text-slate-400 pr-4 font-medium">Total</td>
+                    <td className="pt-2 text-white font-bold">{fmt(lineItems.reduce((s, i) => s + i.total_price, 0))}</td>
+                    <td />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </Card>
+        </div>
+      )}
+
+      {activeTab === 'Renewals' && (
+        <div className="space-y-4">
+          <RoleGuard minRole="editor">
+            <Button onClick={() => setShowRenewalModal(true)}>+ Log Renewal</Button>
+          </RoleGuard>
+          {renewalTrendData.length > 1 && (
+            <Card>
+              <p className="text-white font-semibold mb-4">Cost Trend</p>
+              <ResponsiveContainer width="100%" height={180}>
+                <LineChart data={renewalTrendData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="date" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => [fmt(v), 'Annual Cost']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
+                  <Line type="monotone" dataKey="cost" stroke={brandPrimary} strokeWidth={2} dot={{ fill: brandPrimary, r: 4 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+          <div className="space-y-2">
+            {renewals.map((r) => (
+              <Card key={r.id}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-white font-medium">{r.renewal_date}</p>
+                    <p className="text-slate-400 text-sm mt-1">{r.reason}</p>
+                    {r.license_count_change !== 0 && (
+                      <p className="text-slate-400 text-xs mt-1">
+                        License change: <span className={r.license_count_change > 0 ? 'text-emerald-400' : 'text-red-400'}>{r.license_count_change > 0 ? '+' : ''}{r.license_count_change}</span>
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-slate-400 text-sm">{fmt(r.prev_cost)} → <span className={r.new_cost > r.prev_cost ? 'text-red-400' : 'text-emerald-400'}>{fmt(r.new_cost)}</span></p>
+                    <Badge variant={r.new_cost > r.prev_cost ? 'danger' : 'success'}>
+                      {r.new_cost > r.prev_cost ? '+' : ''}{(((r.new_cost - r.prev_cost) / (r.prev_cost || 1)) * 100).toFixed(1)}%
+                    </Badge>
+                  </div>
+                </div>
+              </Card>
+            ))}
+            {renewals.length === 0 && <p className="text-slate-400 text-sm">No renewal history logged.</p>}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'Notes' && (
+        <div className="space-y-4">
+          <RoleGuard minRole="editor">
+            <Button onClick={() => setShowNoteModal(true)}>+ Add Note</Button>
+          </RoleGuard>
+          <div className="space-y-3">
+            {notes.map((n) => (
+              <Card key={n.id}>
+                <p className="text-white text-sm whitespace-pre-wrap">{n.note}</p>
+                <p className="text-slate-400 text-xs mt-2">{n.created_by} · {n.created_at}</p>
+              </Card>
+            ))}
+            {notes.length === 0 && <p className="text-slate-400 text-sm">No notes yet.</p>}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'Projects' && (
+        <div className="space-y-4">
+          <RoleGuard minRole="editor">
+            <Button onClick={() => setShowProjectModal(true)}>+ Add Project</Button>
+          </RoleGuard>
+          <div className="space-y-3">
+            {projects.map((p) => (
+              <Card key={p.id}>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <p className="text-white font-semibold">{p.name}</p>
+                    <p className="text-slate-400 text-sm mt-1">{p.description}</p>
+                    {(p.start_date || p.end_date) && (
+                      <p className="text-slate-400 text-xs mt-1">{p.start_date} → {p.end_date}</p>
+                    )}
+                  </div>
+                  <Badge variant={p.status === 'active' ? 'success' : p.status === 'on_hold' ? 'warning' : 'neutral'}>
+                    {p.status.replace('_', ' ')}
+                  </Badge>
+                </div>
+              </Card>
+            ))}
+            {projects.length === 0 && <p className="text-slate-400 text-sm">No projects yet.</p>}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'Competitors' && (
+        <div className="space-y-4">
+          <RoleGuard minRole="editor">
+            <Button onClick={() => setShowCompetitorModal(true)}>+ Add Competitor Offering</Button>
+          </RoleGuard>
+          {/* Comparison table */}
+          {competitors.length > 0 && (
+            <Card>
+              <p className="text-white font-semibold mb-4">Side-by-Side Comparison</p>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-slate-400 border-b border-slate-800 text-left">
+                      <th className="pb-2 font-medium">Vendor</th>
+                      <th className="pb-2 font-medium">Offering</th>
+                      <th className="pb-2 font-medium">Price/yr</th>
+                      <th className="pb-2 font-medium">vs Current</th>
+                      <th className="pb-2 font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-b border-slate-800">
+                      <td className="py-2 font-medium text-white">{contract.vendor_name} (Current)</td>
+                      <td className="py-2 text-slate-300">—</td>
+                      <td className="py-2 text-white font-bold">{fmt(contract.annual_cost)}</td>
+                      <td className="py-2">—</td>
+                      <td className="py-2">—</td>
+                    </tr>
+                    {competitors.map((c) => {
+                      const diff = c.price - contract.annual_cost
+                      return (
+                        <tr key={c.id} className="border-b border-slate-800 last:border-0">
+                          <td className="py-2 text-slate-300">{c.competitor_vendor}</td>
+                          <td className="py-2 text-slate-300">{c.offering_name}</td>
+                          <td className="py-2 text-white">{fmt(c.price)}</td>
+                          <td className="py-2">
+                            <Badge variant={diff < 0 ? 'success' : 'danger'}>
+                              {diff < 0 ? '' : '+'}{fmt(diff)}
+                            </Badge>
+                          </td>
+                          <td className="py-2 text-slate-400 text-xs">{c.notes}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Modals */}
+      <Modal open={showRenewalModal} onClose={() => setShowRenewalModal(false)} title="Log Renewal">
+        <form onSubmit={saveRenewal} className="space-y-4">
+          <Input label="Renewal Date" type="date" value={renewalForm.renewal_date} onChange={(e) => setRenewalForm((f) => ({ ...f, renewal_date: e.target.value }))} required />
+          <Input label="Previous Annual Cost ($)" type="number" value={renewalForm.prev_cost} onChange={(e) => setRenewalForm((f) => ({ ...f, prev_cost: e.target.value }))} />
+          <Input label="New Annual Cost ($)" type="number" value={renewalForm.new_cost} onChange={(e) => setRenewalForm((f) => ({ ...f, new_cost: e.target.value }))} />
+          <Input label="License Count Change" type="number" value={renewalForm.license_count_change} onChange={(e) => setRenewalForm((f) => ({ ...f, license_count_change: e.target.value }))} />
+          <div className="flex flex-col gap-1">
+            <label className="text-slate-300 text-sm font-medium">Reason / Notes</label>
+            <textarea className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none h-20 resize-none" value={renewalForm.reason} onChange={(e) => setRenewalForm((f) => ({ ...f, reason: e.target.value }))} />
+          </div>
+          <Button type="submit" className="w-full justify-center">Save Renewal</Button>
+        </form>
+      </Modal>
+
+      <Modal open={showNoteModal} onClose={() => setShowNoteModal(false)} title="Add Note">
+        <form onSubmit={saveNote} className="space-y-4">
+          <div className="flex flex-col gap-1">
+            <label className="text-slate-300 text-sm font-medium">Note</label>
+            <textarea className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none h-32 resize-none" value={noteText} onChange={(e) => setNoteText(e.target.value)} placeholder="Enter your note..." required />
+          </div>
+          <Button type="submit" className="w-full justify-center">Save Note</Button>
+        </form>
+      </Modal>
+
+      <Modal open={showProjectModal} onClose={() => setShowProjectModal(false)} title="Add Vendor Project">
+        <form onSubmit={saveProject} className="space-y-4">
+          <Input label="Project Name" value={projectForm.name} onChange={(e) => setProjectForm((f) => ({ ...f, name: e.target.value }))} required />
+          <Select label="Status" value={projectForm.status} onChange={(e) => setProjectForm((f) => ({ ...f, status: e.target.value }))}
+            options={[{ value: 'active', label: 'Active' }, { value: 'on_hold', label: 'On Hold' }, { value: 'completed', label: 'Completed' }]} />
+          <div className="grid grid-cols-2 gap-4">
+            <Input label="Start Date" type="date" value={projectForm.start_date} onChange={(e) => setProjectForm((f) => ({ ...f, start_date: e.target.value }))} />
+            <Input label="End Date" type="date" value={projectForm.end_date} onChange={(e) => setProjectForm((f) => ({ ...f, end_date: e.target.value }))} />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-slate-300 text-sm font-medium">Description</label>
+            <textarea className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none h-20 resize-none" value={projectForm.description} onChange={(e) => setProjectForm((f) => ({ ...f, description: e.target.value }))} />
+          </div>
+          <Button type="submit" className="w-full justify-center">Save Project</Button>
+        </form>
+      </Modal>
+
+      <Modal open={showCompetitorModal} onClose={() => setShowCompetitorModal(false)} title="Add Competitor Offering">
+        <form onSubmit={saveCompetitor} className="space-y-4">
+          <Input label="Competitor Vendor" value={competitorForm.competitor_vendor} onChange={(e) => setCompetitorForm((f) => ({ ...f, competitor_vendor: e.target.value }))} required />
+          <Input label="Offering Name" value={competitorForm.offering_name} onChange={(e) => setCompetitorForm((f) => ({ ...f, offering_name: e.target.value }))} required />
+          <Input label="Annual Price ($)" type="number" value={competitorForm.price} onChange={(e) => setCompetitorForm((f) => ({ ...f, price: e.target.value }))} required />
+          <div className="flex flex-col gap-1">
+            <label className="text-slate-300 text-sm font-medium">Notes</label>
+            <textarea className="bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none h-20 resize-none" value={competitorForm.notes} onChange={(e) => setCompetitorForm((f) => ({ ...f, notes: e.target.value }))} />
+          </div>
+          <Button type="submit" className="w-full justify-center">Save Offering</Button>
+        </form>
+      </Modal>
+    </div>
+  )
+}
