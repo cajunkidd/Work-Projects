@@ -8,16 +8,22 @@ import Select from '../components/ui/Select'
 import Modal from '../components/ui/Modal'
 import RoleGuard from '../components/layout/RoleGuard'
 import Badge from '../components/ui/Badge'
-import type { Department, User } from '../../../shared/types'
+import type { Department, Branch, User } from '../../../shared/types'
 
 export default function SettingsPage() {
   const { setTheme, setLogo, logoPath, brandPrimary } = useThemeStore()
   const { user: currentUser } = useAuthStore()
   const [settings, setSettings] = useState<any>({})
   const [departments, setDepartments] = useState<Department[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
   const [users, setUsers] = useState<User[]>([])
   const [newDeptName, setNewDeptName] = useState('')
   const [deptSaving, setDeptSaving] = useState(false)
+
+  // Branch management
+  const [newBranchNumber, setNewBranchNumber] = useState('')
+  const [newBranchName, setNewBranchName] = useState('')
+  const [branchSaving, setBranchSaving] = useState(false)
 
   // Gmail
   const [gmailConnected, setGmailConnected] = useState(false)
@@ -28,10 +34,19 @@ export default function SettingsPage() {
 
   // User management
   const [showUserModal, setShowUserModal] = useState(false)
-  const [userForm, setUserForm] = useState({ name: '', email: '', password: '', role: 'viewer', department_ids: [] as number[] })
+  const [userForm, setUserForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'store_manager',
+    department_ids: [] as number[],
+    branch_ids: [] as number[]
+  })
 
-  // Budget
+  // Budget — supports department or branch
+  const [budgetScope, setBudgetScope] = useState<'company' | 'department' | 'branch'>('company')
   const [budgetDeptId, setBudgetDeptId] = useState('')
+  const [budgetBranchId, setBudgetBranchId] = useState('')
   const [budgetAmount, setBudgetAmount] = useState('')
   const [budgetYear, setBudgetYear] = useState(String(new Date().getFullYear()))
   const [budgetSaving, setBudgetSaving] = useState(false)
@@ -53,6 +68,9 @@ export default function SettingsPage() {
     window.api.departments.list().then((res) => {
       if (res.success && res.data) setDepartments(res.data)
     })
+    window.api.branches.list().then((res) => {
+      if (res.success && res.data) setBranches(res.data)
+    })
     window.api.users.list().then((res) => {
       if (res.success && res.data) setUsers(res.data)
     })
@@ -68,7 +86,6 @@ export default function SettingsPage() {
       setLogo(path)
       await window.api.settings.set({ logo_path: path })
 
-      // Extract colors
       const colorRes = await window.api.settings.extractColors(path)
       if (colorRes.success && colorRes.data) {
         const { primary, secondary, palette } = colorRes.data
@@ -90,7 +107,6 @@ export default function SettingsPage() {
     }
   }
 
-  // Manual color override
   const handleColorSave = async () => {
     await window.api.settings.set({ brand_primary: brandPrimary })
     setTheme({ primary: brandPrimary })
@@ -110,6 +126,23 @@ export default function SettingsPage() {
   const handleDeleteDept = async (id: number) => {
     await window.api.departments.delete(id)
     setDepartments((prev) => prev.filter((d) => d.id !== id))
+  }
+
+  // Add branch
+  const handleAddBranch = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newBranchName.trim() || !newBranchNumber.trim()) return
+    setBranchSaving(true)
+    await window.api.branches.create({ number: parseInt(newBranchNumber), name: newBranchName.trim() })
+    setNewBranchNumber('')
+    setNewBranchName('')
+    setBranchSaving(false)
+    load()
+  }
+
+  const handleDeleteBranch = async (id: number) => {
+    await window.api.branches.delete(id)
+    setBranches((prev) => prev.filter((b) => b.id !== id))
   }
 
   // Gmail
@@ -146,7 +179,8 @@ export default function SettingsPage() {
     e.preventDefault()
     setBudgetSaving(true)
     await window.api.budget.upsert({
-      department_id: budgetDeptId ? parseInt(budgetDeptId) : null,
+      department_id: budgetScope === 'department' && budgetDeptId ? parseInt(budgetDeptId) : null,
+      branch_id: budgetScope === 'branch' && budgetBranchId ? parseInt(budgetBranchId) : null,
       fiscal_year: parseInt(budgetYear),
       total_amount: parseFloat(budgetAmount) || 0
     })
@@ -169,7 +203,7 @@ export default function SettingsPage() {
     e.preventDefault()
     await window.api.users.create(userForm)
     setShowUserModal(false)
-    setUserForm({ name: '', email: '', password: '', role: 'viewer', department_ids: [] })
+    setUserForm({ name: '', email: '', password: '', role: 'store_manager', department_ids: [], branch_ids: [] })
     load()
   }
 
@@ -177,6 +211,18 @@ export default function SettingsPage() {
     if (id === currentUser?.id) return
     await window.api.users.delete(id)
     setUsers((prev) => prev.filter((u) => u.id !== id))
+  }
+
+  const roleLabel = (role: string) => {
+    if (role === 'super_admin') return 'Super Admin'
+    if (role === 'director') return 'Director'
+    return 'Store Manager'
+  }
+
+  const roleBadgeVariant = (role: string): 'info' | 'success' | 'neutral' => {
+    if (role === 'super_admin') return 'info'
+    if (role === 'director') return 'success'
+    return 'neutral'
   }
 
   return (
@@ -187,7 +233,7 @@ export default function SettingsPage() {
       </div>
 
       {/* ─── Branding ─── */}
-      <RoleGuard minRole="admin">
+      <RoleGuard minRole="super_admin">
         <section className="space-y-4">
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Branding</h2>
           <Card>
@@ -217,7 +263,7 @@ export default function SettingsPage() {
       </RoleGuard>
 
       {/* ─── Departments ─── */}
-      <RoleGuard minRole="admin">
+      <RoleGuard minRole="super_admin">
         <section className="space-y-4">
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Departments</h2>
           <form onSubmit={handleAddDept} className="flex gap-2">
@@ -241,21 +287,70 @@ export default function SettingsPage() {
         </section>
       </RoleGuard>
 
+      {/* ─── Branches ─── */}
+      <RoleGuard minRole="super_admin">
+        <section className="space-y-4">
+          <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Store Branches</h2>
+          <form onSubmit={handleAddBranch} className="flex gap-2">
+            <Input
+              placeholder="Branch #"
+              type="number"
+              value={newBranchNumber}
+              onChange={(e) => setNewBranchNumber(e.target.value)}
+              className="w-28"
+            />
+            <Input
+              placeholder="Branch name (e.g. Sulphur)"
+              value={newBranchName}
+              onChange={(e) => setNewBranchName(e.target.value)}
+              className="flex-1"
+            />
+            <Button type="submit" disabled={branchSaving}>Add</Button>
+          </form>
+          <div className="space-y-2">
+            {branches.map((b) => (
+              <div key={b.id} className="flex items-center justify-between bg-slate-800 rounded-lg px-4 py-2">
+                <span className="text-white text-sm">Branch {b.number} – {b.name}</span>
+                <button onClick={() => handleDeleteBranch(b.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
+              </div>
+            ))}
+            {branches.length === 0 && <p className="text-slate-400 text-sm">No branches yet. Add one above.</p>}
+          </div>
+        </section>
+      </RoleGuard>
+
       {/* ─── Budget ─── */}
-      <RoleGuard minRole="admin">
+      <RoleGuard minRole="super_admin">
         <section className="space-y-4">
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Budget Configuration</h2>
           <Card>
             <form onSubmit={handleBudgetSave} className="space-y-4">
               <Select
-                label="Department (leave blank for Company-level)"
-                value={budgetDeptId}
-                onChange={(e) => setBudgetDeptId(e.target.value)}
+                label="Budget Scope"
+                value={budgetScope}
+                onChange={(e) => setBudgetScope(e.target.value as any)}
                 options={[
-                  { value: '', label: 'Company Overall' },
-                  ...departments.map((d) => ({ value: d.id, label: d.name }))
+                  { value: 'company', label: 'Company Overall' },
+                  { value: 'department', label: 'Department' },
+                  { value: 'branch', label: 'Store Branch' }
                 ]}
               />
+              {budgetScope === 'department' && (
+                <Select
+                  label="Department"
+                  value={budgetDeptId}
+                  onChange={(e) => setBudgetDeptId(e.target.value)}
+                  options={departments.map((d) => ({ value: d.id, label: d.name }))}
+                />
+              )}
+              {budgetScope === 'branch' && (
+                <Select
+                  label="Store Branch"
+                  value={budgetBranchId}
+                  onChange={(e) => setBudgetBranchId(e.target.value)}
+                  options={branches.map((b) => ({ value: b.id, label: `Branch ${b.number} – ${b.name}` }))}
+                />
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Fiscal Year" type="number" value={budgetYear} onChange={(e) => setBudgetYear(e.target.value)} required />
                 <Input label="Total Budget ($)" type="number" min="0" step="0.01" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} required />
@@ -270,7 +365,7 @@ export default function SettingsPage() {
       </RoleGuard>
 
       {/* ─── Gmail ─── */}
-      <RoleGuard minRole="admin">
+      <RoleGuard minRole="super_admin">
         <section className="space-y-4">
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Gmail Integration</h2>
           <Card>
@@ -304,7 +399,7 @@ export default function SettingsPage() {
       </RoleGuard>
 
       {/* ─── Network DB ─── */}
-      <RoleGuard minRole="admin">
+      <RoleGuard minRole="super_admin">
         <section className="space-y-4">
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Shared Database Location</h2>
           <Card>
@@ -318,7 +413,7 @@ export default function SettingsPage() {
       </RoleGuard>
 
       {/* ─── User Management ─── */}
-      <RoleGuard minRole="admin">
+      <RoleGuard minRole="super_admin">
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h2 className="text-white font-semibold text-lg">User Management</h2>
@@ -332,8 +427,8 @@ export default function SettingsPage() {
                   <p className="text-slate-400 text-xs">{u.email}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Badge variant={u.role === 'admin' ? 'info' : u.role === 'editor' ? 'success' : 'neutral'}>
-                    {u.role}
+                  <Badge variant={roleBadgeVariant(u.role)}>
+                    {roleLabel(u.role)}
                   </Badge>
                   {u.id !== currentUser?.id && (
                     <button onClick={() => handleDeleteUser(u.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
@@ -353,32 +448,75 @@ export default function SettingsPage() {
           <Select
             label="Role"
             value={userForm.role}
-            onChange={(e) => setUserForm((f) => ({ ...f, role: e.target.value }))}
-            options={[{ value: 'admin', label: 'Admin' }, { value: 'editor', label: 'Editor' }, { value: 'viewer', label: 'Viewer' }]}
+            onChange={(e) => setUserForm((f) => ({ ...f, role: e.target.value, department_ids: [], branch_ids: [] }))}
+            options={[
+              { value: 'super_admin', label: 'Super Admin' },
+              { value: 'director', label: 'Director' },
+              { value: 'store_manager', label: 'Store Manager' }
+            ]}
           />
-          <div className="flex flex-col gap-1">
-            <label className="text-slate-300 text-sm font-medium">Department Access (leave empty = all departments)</label>
-            <div className="flex flex-wrap gap-2">
-              {departments.map((d) => (
-                <label key={d.id} className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={userForm.department_ids.includes(d.id)}
-                    onChange={(e) => {
-                      setUserForm((f) => ({
-                        ...f,
-                        department_ids: e.target.checked
-                          ? [...f.department_ids, d.id]
-                          : f.department_ids.filter((id) => id !== d.id)
-                      }))
-                    }}
-                    className="rounded"
-                  />
-                  <span className="text-slate-300 text-sm">{d.name}</span>
-                </label>
-              ))}
+
+          {/* Branch access — shown for director and store_manager */}
+          {(userForm.role === 'store_manager' || userForm.role === 'director') && (
+            <div className="flex flex-col gap-1">
+              <label className="text-slate-300 text-sm font-medium">
+                {userForm.role === 'store_manager' ? 'Assigned Branch' : 'Assigned Branches'}
+              </label>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                {branches.map((b) => (
+                  <label key={b.id} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type={userForm.role === 'store_manager' ? 'radio' : 'checkbox'}
+                      name="branch_select"
+                      checked={userForm.branch_ids.includes(b.id)}
+                      onChange={(e) => {
+                        if (userForm.role === 'store_manager') {
+                          setUserForm((f) => ({ ...f, branch_ids: e.target.checked ? [b.id] : [] }))
+                        } else {
+                          setUserForm((f) => ({
+                            ...f,
+                            branch_ids: e.target.checked
+                              ? [...f.branch_ids, b.id]
+                              : f.branch_ids.filter((id) => id !== b.id)
+                          }))
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-slate-300 text-sm">Branch {b.number} – {b.name}</span>
+                  </label>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Department access — shown for director only */}
+          {userForm.role === 'director' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-slate-300 text-sm font-medium">Assigned Departments</label>
+              <div className="flex flex-wrap gap-2">
+                {departments.map((d) => (
+                  <label key={d.id} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={userForm.department_ids.includes(d.id)}
+                      onChange={(e) => {
+                        setUserForm((f) => ({
+                          ...f,
+                          department_ids: e.target.checked
+                            ? [...f.department_ids, d.id]
+                            : f.department_ids.filter((id) => id !== d.id)
+                        }))
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-slate-300 text-sm">{d.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <Button type="submit" className="w-full justify-center">Create User</Button>
         </form>
       </Modal>

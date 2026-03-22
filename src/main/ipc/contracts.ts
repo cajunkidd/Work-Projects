@@ -25,26 +25,73 @@ async function parseXlsx(filePath: string): Promise<Record<string, string>[]> {
 }
 
 export function registerContractHandlers(): void {
-  // List contracts (with optional department filter)
+  // List contracts (with optional department/branch filter and role-based access)
   ipcMain.handle(
     'contracts:list',
-    async (_e, opts?: { department_id?: number; search?: string }): Promise<IpcResponse<Contract[]>> => {
+    async (
+      _e,
+      opts?: {
+        department_id?: number
+        branch_id?: number
+        search?: string
+        // role-based filtering
+        role?: string
+        allowed_department_ids?: number[]
+        allowed_branch_ids?: number[]
+      }
+    ): Promise<IpcResponse<Contract[]>> => {
       try {
         const db = getDb()
         let query = `
-          SELECT c.*, d.name as department_name,
+          SELECT c.*, d.name as department_name, br.name as branch_name,
             (SELECT COUNT(*) FROM vendor_notes WHERE contract_id = c.id) as notes_count,
             CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal
           FROM contracts c
           LEFT JOIN departments d ON c.department_id = d.id
+          LEFT JOIN branches br ON c.branch_id = br.id
           WHERE 1=1
         `
         const params: (string | number)[] = []
 
+        // Explicit filter by a single dept or branch
         if (opts?.department_id) {
           query += ' AND c.department_id = ?'
           params.push(opts.department_id)
         }
+        if (opts?.branch_id) {
+          query += ' AND c.branch_id = ?'
+          params.push(opts.branch_id)
+        }
+
+        // Role-based visibility
+        if (opts?.role === 'store_manager') {
+          const ids = opts.allowed_branch_ids ?? []
+          if (ids.length === 0) {
+            query += ' AND 1=0' // no access
+          } else {
+            query += ` AND c.branch_id IN (${ids.map(() => '?').join(',')})`
+            params.push(...ids)
+          }
+        } else if (opts?.role === 'director') {
+          const deptIds = opts.allowed_department_ids ?? []
+          const branchIds = opts.allowed_branch_ids ?? []
+          const clauses: string[] = []
+          if (deptIds.length > 0) {
+            clauses.push(`c.department_id IN (${deptIds.map(() => '?').join(',')})`)
+            params.push(...deptIds)
+          }
+          if (branchIds.length > 0) {
+            clauses.push(`c.branch_id IN (${branchIds.map(() => '?').join(',')})`)
+            params.push(...branchIds)
+          }
+          if (clauses.length > 0) {
+            query += ` AND (${clauses.join(' OR ')})`
+          } else {
+            query += ' AND 1=0'
+          }
+        }
+        // super_admin: no additional filter
+
         if (opts?.search) {
           query += ' AND (c.vendor_name LIKE ? OR c.poc_name LIKE ?)'
           params.push(`%${opts.search}%`, `%${opts.search}%`)
@@ -64,10 +111,11 @@ export function registerContractHandlers(): void {
     try {
       const row = getDb()
         .prepare(
-          `SELECT c.*, d.name as department_name,
+          `SELECT c.*, d.name as department_name, br.name as branch_name,
             CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal
            FROM contracts c
            LEFT JOIN departments d ON c.department_id = d.id
+           LEFT JOIN branches br ON c.branch_id = br.id
            WHERE c.id = ?`
         )
         .get(id) as Contract
@@ -87,8 +135,8 @@ export function registerContractHandlers(): void {
           .prepare(
             `INSERT INTO contracts
              (vendor_name, status, start_date, end_date, monthly_cost, annual_cost, total_cost,
-              poc_name, poc_email, poc_phone, department_id, file_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
+              poc_name, poc_email, poc_phone, department_id, branch_id, file_path)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.vendor_name,
@@ -101,7 +149,8 @@ export function registerContractHandlers(): void {
             payload.poc_name,
             payload.poc_email,
             payload.poc_phone,
-            payload.department_id,
+            payload.department_id ?? null,
+            payload.branch_id ?? null,
             payload.file_path || null
           )
         const row = db

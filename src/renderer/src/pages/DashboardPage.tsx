@@ -18,6 +18,7 @@ import {
   Legend
 } from 'recharts'
 import { useThemeStore } from '../store/themeStore'
+import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import type { BudgetSummary, Contract, Invoice } from '../../../shared/types'
@@ -37,6 +38,7 @@ function BudgetGauge({ summary }: { summary: BudgetSummary }) {
   const pct = summary.total_budget > 0 ? Math.min((summary.total_spent / summary.total_budget) * 100, 100) : 0
   const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981'
   const data = [{ name: 'used', value: pct, fill: color }]
+  const label = summary.branch_name ?? summary.department_name ?? 'Company'
 
   return (
     <div className="flex flex-col items-center">
@@ -60,9 +62,7 @@ function BudgetGauge({ summary }: { summary: BudgetSummary }) {
           <span className="text-slate-400 text-xs">used</span>
         </div>
       </div>
-      <p className="text-white text-sm font-medium mt-1 text-center">
-        {summary.department_name || 'Company'}
-      </p>
+      <p className="text-white text-sm font-medium mt-1 text-center">{label}</p>
       <p className="text-slate-400 text-xs">{fmt(summary.total_spent)} / {fmt(summary.total_budget)}</p>
     </div>
   )
@@ -71,6 +71,7 @@ function BudgetGauge({ summary }: { summary: BudgetSummary }) {
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { selectedDeptId, brandPrimary } = useThemeStore()
+  const { user } = useAuthStore()
   const [summaries, setSummaries] = useState<BudgetSummary[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
   const [upcomingRenewals, setUpcomingRenewals] = useState<Contract[]>([])
@@ -80,26 +81,48 @@ export default function DashboardPage() {
   const year = new Date().getFullYear()
 
   useEffect(() => {
-    const opts = selectedDeptId ? { department_id: selectedDeptId } : undefined
+    if (!user) return
 
-    window.api.budget.summaries(year).then((res) => {
+    // Budget summaries — pass role filter for scoped access
+    const budgetFilter = user.role !== 'super_admin'
+      ? { role: user.role, department_ids: user.department_ids, branch_ids: user.branch_ids }
+      : undefined
+    window.api.budget.summaries(year, budgetFilter).then((res) => {
       if (res.success && res.data) setSummaries(res.data)
     })
 
-    window.api.contracts.list(opts).then((res) => {
+    // Contracts — role-based filter
+    const contractOpts: any = {}
+    if (user.role === 'super_admin') {
+      if (selectedDeptId) contractOpts.department_id = selectedDeptId
+    } else {
+      contractOpts.role = user.role
+      contractOpts.allowed_department_ids = user.department_ids
+      contractOpts.allowed_branch_ids = user.branch_ids
+    }
+
+    window.api.contracts.list(contractOpts).then((res) => {
       if (res.success && res.data) setContracts(res.data)
     })
 
     window.api.dashboard.upcomingRenewals().then((res) => {
       if (res.success && res.data) {
-        const filtered = selectedDeptId
-          ? res.data.filter((c: Contract) => c.department_id === selectedDeptId)
-          : res.data
+        let filtered = res.data as Contract[]
+        if (user.role === 'store_manager') {
+          filtered = filtered.filter((c) => c.branch_id !== null && user.branch_ids.includes(c.branch_id))
+        } else if (user.role === 'director') {
+          filtered = filtered.filter((c) =>
+            (c.branch_id !== null && user.branch_ids.includes(c.branch_id)) ||
+            (c.department_id !== null && user.department_ids.includes(c.department_id))
+          )
+        } else if (selectedDeptId) {
+          filtered = filtered.filter((c) => c.department_id === selectedDeptId)
+        }
         setUpcomingRenewals(filtered.slice(0, 8))
       }
     })
 
-    window.api.invoices.list(opts).then((res) => {
+    window.api.invoices.list().then((res) => {
       if (res.success && res.data) setRecentInvoices(res.data.slice(0, 5))
     })
 
@@ -107,7 +130,7 @@ export default function DashboardPage() {
       if (res.success && res.data) setSpendTrend(res.data)
     })
 
-    window.api.projects.list(opts).then((res) => {
+    window.api.projects.list().then((res) => {
       if (res.success && res.data) {
         const counts = { active: 0, on_hold: 0, completed: 0 }
         res.data.forEach((p: any) => {
@@ -116,7 +139,7 @@ export default function DashboardPage() {
         setProjectCounts(counts)
       }
     })
-  }, [selectedDeptId, year])
+  }, [selectedDeptId, year, user])
 
   // Status breakdown for pie chart
   const statusCounts = ['active', 'expiring_soon', 'expired', 'pending'].map((s) => ({
@@ -125,13 +148,21 @@ export default function DashboardPage() {
     fill: STATUS_COLORS[s as keyof typeof STATUS_COLORS]
   })).filter((s) => s.value > 0)
 
-  // Budget bars for company overview
-  const deptBudgets = summaries.filter((s) => s.department_id !== null)
+  // Budget bars — department budgets (super_admin and director)
+  const deptBudgets = summaries.filter((s) => s.department_id !== null && s.branch_id === null)
+  // Branch budget gauges (visible to all roles based on their scoped summaries)
+  const branchBudgets = summaries.filter((s) => s.branch_id !== null)
 
-  // Current summary
-  const currentSummary = selectedDeptId
-    ? summaries.find((s) => s.department_id === selectedDeptId)
-    : summaries.find((s) => s.department_id === null)
+  // Current summary for the gauge:
+  // - store_manager: their single branch budget
+  // - director: first assigned branch or first assigned department
+  // - super_admin: company overall or selected dept
+  const currentSummary = (() => {
+    if (user?.role === 'store_manager') return branchBudgets[0] ?? null
+    if (user?.role === 'director') return branchBudgets[0] ?? deptBudgets[0] ?? null
+    if (selectedDeptId) return summaries.find((s) => s.department_id === selectedDeptId) ?? null
+    return summaries.find((s) => s.department_id === null && s.branch_id === null) ?? null
+  })()
 
   return (
     <div className="space-y-6">
@@ -225,11 +256,11 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Department budget bars (company overview only) */}
-      {!selectedDeptId && deptBudgets.length > 0 && (
+      {/* Department budget bars (super_admin and director) */}
+      {deptBudgets.length > 0 && user?.role !== 'store_manager' && (
         <Card>
           <p className="text-white font-semibold mb-4">Department Budget Utilization</p>
-          <ResponsiveContainer width="100%" height={180}>
+          <ResponsiveContainer width="100%" height={Math.max(120, deptBudgets.length * 36)}>
             <BarChart data={deptBudgets} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
               <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
@@ -239,6 +270,18 @@ export default function DashboardPage() {
               <Bar dataKey="total_budget" name="Budget" fill="#1e293b" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
+        </Card>
+      )}
+
+      {/* Branch budget gauges */}
+      {branchBudgets.length > 0 && (
+        <Card>
+          <p className="text-white font-semibold mb-4">Store Branch Budget Utilization</p>
+          <div className="flex flex-wrap gap-6 justify-start">
+            {branchBudgets.map((s) => (
+              <BudgetGauge key={`branch-${s.branch_id}`} summary={s} />
+            ))}
+          </div>
         </Card>
       )}
 
@@ -262,7 +305,7 @@ export default function DashboardPage() {
                   >
                     <div>
                       <p className="text-white text-sm font-medium">{c.vendor_name}</p>
-                      <p className="text-slate-400 text-xs">{c.department_name}</p>
+                      <p className="text-slate-400 text-xs">{c.branch_name ?? c.department_name}</p>
                     </div>
                     <Badge variant={variant}>{days}d</Badge>
                   </div>

@@ -19,10 +19,16 @@ contextBridge.exposeInMainWorld('api', {
     update: (payload: any) => ipcRenderer.invoke('departments:update', payload),
     delete: (id: number) => ipcRenderer.invoke('departments:delete', id)
   },
+  branches: {
+    list: () => ipcRenderer.invoke('branches:list'),
+    create: (payload: any) => ipcRenderer.invoke('branches:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('branches:update', payload),
+    delete: (id: number) => ipcRenderer.invoke('branches:delete', id)
+  },
   budget: {
     list: () => ipcRenderer.invoke('budget:list'),
     upsert: (payload: any) => ipcRenderer.invoke('budget:upsert', payload),
-    summaries: (fiscal_year: number) => ipcRenderer.invoke('budget:summaries', fiscal_year)
+    summaries: (fiscal_year: number, filter?: any) => ipcRenderer.invoke('budget:summaries', fiscal_year, filter)
   },
 
   // Contracts

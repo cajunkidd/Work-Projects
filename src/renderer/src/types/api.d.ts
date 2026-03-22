@@ -3,6 +3,7 @@ import type {
   User,
   LoginCredentials,
   Department,
+  Branch,
   Budget,
   BudgetSummary,
   Contract,
@@ -33,10 +34,16 @@ declare global {
         update: (payload: { id: number; name: string }) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>
       }
+      branches: {
+        list: () => Promise<IpcResponse<Branch[]>>
+        create: (payload: { number: number; name: string }) => Promise<IpcResponse<Branch>>
+        update: (payload: { id: number; number?: number; name?: string }) => Promise<IpcResponse<void>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+      }
       budget: {
         list: () => Promise<IpcResponse<Budget[]>>
         upsert: (payload: any) => Promise<IpcResponse<void>>
-        summaries: (fiscal_year: number) => Promise<IpcResponse<BudgetSummary[]>>
+        summaries: (fiscal_year: number, filter?: { role: string; department_ids: number[]; branch_ids: number[] }) => Promise<IpcResponse<BudgetSummary[]>>
       }
       contracts: {
         list: (opts?: any) => Promise<IpcResponse<Contract[]>>

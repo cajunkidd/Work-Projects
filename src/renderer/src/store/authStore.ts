@@ -8,6 +8,7 @@ interface AuthState {
   logout: () => void
   can: (role: UserRole) => boolean
   canAccessDepartment: (department_id: number) => boolean
+  canAccessBranch: (branch_id: number) => boolean
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -19,15 +20,24 @@ export const useAuthStore = create<AuthState>()(
       can: (minRole: UserRole) => {
         const { user } = get()
         if (!user) return false
-        const levels: Record<UserRole, number> = { viewer: 0, editor: 1, admin: 2 }
+        const levels: Record<UserRole, number> = { store_manager: 0, director: 1, super_admin: 2 }
         return levels[user.role] >= levels[minRole]
       },
       canAccessDepartment: (department_id: number) => {
         const { user } = get()
         if (!user) return false
-        if (user.role === 'admin') return true
+        if (user.role === 'super_admin') return true
+        if (user.role === 'store_manager') return false
+        // director: scoped to assigned departments
         if (!user.department_ids || user.department_ids.length === 0) return true
         return user.department_ids.includes(department_id)
+      },
+      canAccessBranch: (branch_id: number) => {
+        const { user } = get()
+        if (!user) return false
+        if (user.role === 'super_admin') return true
+        if (!user.branch_ids || user.branch_ids.length === 0) return false
+        return user.branch_ids.includes(branch_id)
       }
     }),
     {

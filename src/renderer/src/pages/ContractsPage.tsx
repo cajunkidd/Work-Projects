@@ -9,7 +9,7 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
-import type { Contract, Department } from '../../../shared/types'
+import type { Contract, Department, Branch } from '../../../shared/types'
 
 function statusVariant(s: string) {
   return s === 'active' ? 'success' : s === 'expiring_soon' ? 'warning' : s === 'expired' ? 'danger' : 'neutral'
@@ -22,15 +22,20 @@ function fmt(n: number) {
 const emptyForm = {
   vendor_name: '', status: 'active', start_date: '', end_date: '',
   monthly_cost: '', annual_cost: '', total_cost: '',
-  poc_name: '', poc_email: '', poc_phone: '', department_id: '', file_path: ''
+  poc_name: '', poc_email: '', poc_phone: '',
+  scope: 'department' as 'department' | 'branch',
+  department_id: '',
+  branch_id: '',
+  file_path: ''
 }
 
 export default function ContractsPage() {
   const navigate = useNavigate()
   const { selectedDeptId } = useThemeStore()
-  const { can } = useAuthStore()
+  const { user, can } = useAuthStore()
   const [contracts, setContracts] = useState<Contract[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -38,9 +43,19 @@ export default function ContractsPage() {
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
 
   const load = () => {
-    const opts: any = {}
-    if (selectedDeptId) opts.department_id = selectedDeptId
-    if (search) opts.search = search
+    if (!user) return
+    const opts: any = { search: search || undefined }
+
+    if (user.role === 'super_admin') {
+      // Optional dept filter from sidebar
+      if (selectedDeptId) opts.department_id = selectedDeptId
+    } else {
+      // Pass role-based access info to the backend
+      opts.role = user.role
+      opts.allowed_department_ids = user.department_ids
+      opts.allowed_branch_ids = user.branch_ids
+    }
+
     window.api.contracts.list(opts).then((res) => {
       if (res.success && res.data) setContracts(res.data)
     })
@@ -55,9 +70,14 @@ export default function ContractsPage() {
         }
       }
     })
+    window.api.branches.list().then((res) => {
+      if (res.success && res.data) {
+        setBranches(res.data)
+      }
+    })
   }, [])
 
-  useEffect(() => { load() }, [selectedDeptId, search])
+  useEffect(() => { load() }, [selectedDeptId, search, user])
 
   const handleUpload = async () => {
     const res = await window.api.contracts.uploadFile()
@@ -70,12 +90,20 @@ export default function ContractsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    const payload = {
-      ...form,
+    const payload: any = {
+      vendor_name: form.vendor_name,
+      status: form.status,
+      start_date: form.start_date,
+      end_date: form.end_date,
       monthly_cost: parseFloat(form.monthly_cost) || 0,
       annual_cost: parseFloat(form.annual_cost) || (parseFloat(form.monthly_cost) || 0) * 12,
       total_cost: parseFloat(form.total_cost) || 0,
-      department_id: parseInt(form.department_id)
+      poc_name: form.poc_name,
+      poc_email: form.poc_email,
+      poc_phone: form.poc_phone,
+      department_id: form.scope === 'department' && form.department_id ? parseInt(form.department_id) : null,
+      branch_id: form.scope === 'branch' && form.branch_id ? parseInt(form.branch_id) : null,
+      file_path: form.file_path || null
     }
     const res = await window.api.contracts.create(payload)
     setSaving(false)
@@ -96,7 +124,7 @@ export default function ContractsPage() {
           <h1 className="text-white text-2xl font-bold">Contracts</h1>
           <p className="text-slate-400 text-sm">{contracts.length} contracts</p>
         </div>
-        <RoleGuard minRole="editor">
+        <RoleGuard minRole="super_admin">
           <Button onClick={() => setShowModal(true)}>+ New Contract</Button>
         </RoleGuard>
       </div>
@@ -113,7 +141,7 @@ export default function ContractsPage() {
       <div className="space-y-3">
         {contracts.length === 0 ? (
           <Card className="text-center py-12">
-            <p className="text-slate-400">No contracts found. Add your first contract to get started.</p>
+            <p className="text-slate-400">No contracts found.</p>
           </Card>
         ) : (
           contracts.map((c) => (
@@ -132,7 +160,11 @@ export default function ContractsPage() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-4 text-sm text-slate-400">
-                    <span>Dept: <span className="text-slate-300">{c.department_name}</span></span>
+                    {c.branch_name ? (
+                      <span>Branch: <span className="text-slate-300">{c.branch_name}</span></span>
+                    ) : (
+                      <span>Dept: <span className="text-slate-300">{c.department_name}</span></span>
+                    )}
                     <span>Start: <span className="text-slate-300">{c.start_date}</span></span>
                     <span>End: <span className="text-slate-300">{c.end_date}</span></span>
                     <span>POC: <span className="text-slate-300">{c.poc_name}</span></span>
@@ -154,13 +186,32 @@ export default function ContractsPage() {
           <div className="grid grid-cols-2 gap-4">
             <Input label="Vendor Name" value={form.vendor_name} onChange={(e) => f('vendor_name', e.target.value)} required />
             <Select
+              label="Contract Scope"
+              value={form.scope}
+              onChange={(e) => f('scope', e.target.value)}
+              options={[
+                { value: 'department', label: 'Department Contract' },
+                { value: 'branch', label: 'Store Branch Contract' }
+              ]}
+            />
+          </div>
+          {form.scope === 'department' ? (
+            <Select
               label="Department"
               value={form.department_id}
               onChange={(e) => f('department_id', e.target.value)}
               options={departments.map((d) => ({ value: d.id, label: d.name }))}
               required
             />
-          </div>
+          ) : (
+            <Select
+              label="Store Branch"
+              value={form.branch_id}
+              onChange={(e) => f('branch_id', e.target.value)}
+              options={branches.map((b) => ({ value: b.id, label: `Branch ${b.number} – ${b.name}` }))}
+              required
+            />
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Input label="Start Date" type="date" value={form.start_date} onChange={(e) => f('start_date', e.target.value)} required />
             <Input label="End Date" type="date" value={form.end_date} onChange={(e) => f('end_date', e.target.value)} required />

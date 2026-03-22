@@ -144,8 +144,121 @@ function runMigrations(): void {
     );
   `)
 
+  // Run incremental migrations
+  runV1Migration()
+
   // Auto-compute contract statuses
   updateContractStatuses()
+}
+
+function runV1Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 1) return
+
+  // 1. Create branches table
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS branches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      number INTEGER NOT NULL UNIQUE,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+
+  // 2. Seed the 13 branches
+  db.exec(`
+    INSERT OR IGNORE INTO branches (number, name) VALUES
+      (11,'Sulphur'),(12,'DeRidder'),(13,'Lake Charles'),(14,'Jennings'),
+      (15,'Iowa'),(17,'Crowley'),(18,'Natchitoches'),(20,'Natchez'),
+      (21,'Pineville'),(22,'Walker'),(23,'Broussard'),(24,'Eunice'),(25,'Bossier City');
+  `)
+
+  // 3. Rebuild users table: new role constraint + branch_ids column
+  db.exec(`
+    ALTER TABLE users RENAME TO users_old;
+
+    CREATE TABLE users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      email TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL DEFAULT 'store_manager'
+        CHECK(role IN ('super_admin','director','store_manager')),
+      department_ids TEXT NOT NULL DEFAULT '[]',
+      branch_ids TEXT NOT NULL DEFAULT '[]',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    INSERT INTO users (id, name, email, password_hash, role, department_ids, branch_ids, created_at)
+      SELECT id, name, email, password_hash,
+        CASE role
+          WHEN 'admin'   THEN 'super_admin'
+          WHEN 'editor'  THEN 'director'
+          ELSE                'store_manager'
+        END,
+        department_ids, '[]', created_at
+      FROM users_old;
+
+    DROP TABLE users_old;
+  `)
+
+  // 4. Rebuild contracts table: department_id nullable + branch_id
+  db.exec(`
+    ALTER TABLE contracts RENAME TO contracts_old;
+
+    CREATE TABLE contracts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_name TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK(status IN ('active','expiring_soon','expired','pending')),
+      start_date TEXT NOT NULL,
+      end_date TEXT NOT NULL,
+      monthly_cost REAL NOT NULL DEFAULT 0,
+      annual_cost REAL NOT NULL DEFAULT 0,
+      total_cost REAL NOT NULL DEFAULT 0,
+      poc_name TEXT NOT NULL DEFAULT '',
+      poc_email TEXT NOT NULL DEFAULT '',
+      poc_phone TEXT NOT NULL DEFAULT '',
+      department_id INTEGER REFERENCES departments(id),
+      branch_id INTEGER REFERENCES branches(id),
+      file_path TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    INSERT INTO contracts (id, vendor_name, status, start_date, end_date,
+      monthly_cost, annual_cost, total_cost, poc_name, poc_email, poc_phone,
+      department_id, branch_id, file_path, created_at)
+    SELECT id, vendor_name, status, start_date, end_date,
+      monthly_cost, annual_cost, total_cost, poc_name, poc_email, poc_phone,
+      department_id, NULL, file_path, created_at
+    FROM contracts_old;
+
+    DROP TABLE contracts_old;
+  `)
+
+  // 5. Rebuild budget table: branch_id column + updated UNIQUE constraint
+  db.exec(`
+    ALTER TABLE budget RENAME TO budget_old;
+
+    CREATE TABLE budget (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      department_id INTEGER REFERENCES departments(id) ON DELETE CASCADE,
+      branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE,
+      fiscal_year INTEGER NOT NULL,
+      total_amount REAL NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(department_id, branch_id, fiscal_year)
+    );
+
+    INSERT INTO budget (id, department_id, branch_id, fiscal_year, total_amount, created_at)
+      SELECT id, department_id, NULL, fiscal_year, total_amount, created_at
+      FROM budget_old;
+
+    DROP TABLE budget_old;
+  `)
+
+  // Mark migration complete
+  db.pragma('user_version = 1')
 }
 
 export function updateContractStatuses(): void {

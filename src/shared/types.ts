@@ -1,13 +1,14 @@
 // ─── Users & Auth ───────────────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'editor' | 'viewer'
+export type UserRole = 'super_admin' | 'director' | 'store_manager'
 
 export interface User {
   id: number
   name: string
   email: string
   role: UserRole
-  department_ids: number[] // empty = access all
+  department_ids: number[] // empty = access all (super_admin); specific dept for director
+  branch_ids: number[]     // empty = access all (super_admin); specific branches for director/store_manager
   created_at: string
 }
 
@@ -24,11 +25,21 @@ export interface Department {
   created_at: string
 }
 
+// ─── Branches ────────────────────────────────────────────────────────────────
+
+export interface Branch {
+  id: number
+  number: number
+  name: string
+  created_at: string
+}
+
 // ─── Budget ─────────────────────────────────────────────────────────────────
 
 export interface Budget {
   id: number
-  department_id: number | null // null = company-level
+  department_id: number | null // null when branch-level or company-level
+  branch_id: number | null     // null when department-level or company-level
   fiscal_year: number
   total_amount: number
   created_at: string
@@ -37,6 +48,8 @@ export interface Budget {
 export interface BudgetSummary {
   department_id: number | null
   department_name: string | null
+  branch_id: number | null
+  branch_name: string | null
   fiscal_year: number
   total_budget: number
   total_spent: number
@@ -59,8 +72,10 @@ export interface Contract {
   poc_name: string
   poc_email: string
   poc_phone: string
-  department_id: number
+  department_id: number | null
   department_name?: string
+  branch_id: number | null
+  branch_name?: string
   file_path?: string
   notes_count?: number
   created_at: string
@@ -157,6 +172,7 @@ export interface AppSettings {
 export interface DashboardMetrics {
   budget_summary: BudgetSummary
   dept_budgets: BudgetSummary[]
+  branch_budgets: BudgetSummary[]
   contract_status_counts: { status: ContractStatus; count: number }[]
   upcoming_renewals: Contract[]
   recent_invoices: Invoice[]

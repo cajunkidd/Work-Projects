@@ -48,8 +48,9 @@ export default function LoginPage() {
       name: setupName,
       email,
       password,
-      role: 'admin',
-      department_ids: []
+      role: 'super_admin',
+      department_ids: [],
+      branch_ids: []
     })
     setLoading(false)
     if (res.success && res.data) {
