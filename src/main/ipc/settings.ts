@@ -131,10 +131,10 @@ export function registerSettingsHandlers(): void {
         // Skip near-white and near-black
         if (r > 230 && g > 230 && b > 230) continue
         if (r < 25 && g < 25 && b < 25) continue
-        // Quantize
-        const qr = Math.round(r / 32) * 32
-        const qg = Math.round(g / 32) * 32
-        const qb = Math.round(b / 32) * 32
+        // Quantize (capped at 255 to prevent invalid hex like #100xxxx)
+        const qr = Math.min(255, Math.round(r / 32) * 32)
+        const qg = Math.min(255, Math.round(g / 32) * 32)
+        const qb = Math.min(255, Math.round(b / 32) * 32)
         const hex = `#${qr.toString(16).padStart(2, '0')}${qg.toString(16).padStart(2, '0')}${qb.toString(16).padStart(2, '0')}`
         colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1)
       }

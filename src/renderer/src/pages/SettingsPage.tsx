@@ -194,7 +194,7 @@ export default function SettingsPage() {
             <div className="flex items-start gap-6">
               <div className="flex-shrink-0">
                 {logoPath ? (
-                  <img src={`file://${logoPath}`} alt="Logo" className="h-16 w-16 rounded-xl object-contain bg-white p-2" />
+                  <img src={`app-local://${encodeURIComponent(logoPath)}`} alt="Logo" className="h-16 w-16 rounded-xl object-contain bg-white p-2" />
                 ) : (
                   <div className="h-16 w-16 rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 text-2xl">?</div>
                 )}

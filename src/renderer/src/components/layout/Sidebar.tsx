@@ -21,7 +21,7 @@ export default function Sidebar() {
       <div className="flex items-center gap-3 px-4 py-5 border-b border-slate-800">
         {logoPath ? (
           <img
-            src={`file://${logoPath}`}
+            src={`app-local://${encodeURIComponent(logoPath)}`}
             alt="Logo"
             className="h-10 w-10 rounded-lg object-contain bg-white p-1"
           />

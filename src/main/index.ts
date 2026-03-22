@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import path from 'path'
+import { pathToFileURL } from 'url'
 import { initDatabase, updateContractStatuses } from './database'
 import { registerUserHandlers } from './ipc/users'
 import { registerBudgetHandlers } from './ipc/budget'
@@ -44,7 +45,18 @@ function createWindow(): void {
   })
 }
 
+// Register custom protocol for serving local image files safely in the renderer
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app-local', privileges: { secure: true, supportFetchAPI: true } }
+])
+
 app.whenReady().then(() => {
+  // Serve local files via app-local:// (bypasses file:// cross-origin restriction)
+  protocol.handle('app-local', (request) => {
+    const filePath = decodeURIComponent(request.url.slice('app-local://'.length))
+    return net.fetch(pathToFileURL(filePath).toString())
+  })
+
   // Init database (will use userData path by default)
   initDatabase()
 
