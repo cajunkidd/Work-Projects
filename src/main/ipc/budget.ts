@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import type { IpcResponse, Budget, BudgetSummary, Department, Branch } from '../../shared/types'
+import type { IpcResponse, Budget, BudgetSummary, Department, Branch, ContractAllocation } from '../../shared/types'
 
 export function registerBudgetHandlers(): void {
   // Departments CRUD
@@ -259,7 +259,98 @@ export function registerBudgetHandlers(): void {
           })
         }
 
+        // Fetch allocations active in this fiscal year and build spend maps
+        const allocRows = db
+          .prepare(
+            `SELECT ca.branch_id, ca.department_id, ca.allocation_type, ca.value, c.annual_cost
+             FROM contract_allocations ca
+             JOIN contracts c ON ca.contract_id = c.id
+             WHERE c.status != 'expired'
+               AND strftime('%Y', c.start_date) <= ?
+               AND strftime('%Y', c.end_date) >= ?`
+          )
+          .all(String(fiscal_year), String(fiscal_year)) as any[]
+
+        const branchAllocSpend = new Map<number, number>()
+        const deptAllocSpend = new Map<number, number>()
+        for (const a of allocRows) {
+          const amt =
+            a.allocation_type === 'percentage'
+              ? a.annual_cost * a.value / 100
+              : a.value
+          if (a.branch_id !== null)
+            branchAllocSpend.set(a.branch_id, (branchAllocSpend.get(a.branch_id) ?? 0) + amt)
+          if (a.department_id !== null)
+            deptAllocSpend.set(a.department_id, (deptAllocSpend.get(a.department_id) ?? 0) + amt)
+        }
+
+        // Apply allocated spend to each summary
+        for (const s of summaries) {
+          if (s.branch_id !== null) {
+            const extra = branchAllocSpend.get(s.branch_id) ?? 0
+            s.total_spent += extra
+            s.remaining = s.total_budget - s.total_spent
+          } else if (s.department_id !== null) {
+            const extra = deptAllocSpend.get(s.department_id) ?? 0
+            s.total_spent += extra
+            s.remaining = s.total_budget - s.total_spent
+          }
+        }
+
         return { success: true, data: summaries }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  // ── Allocations ────────────────────────────────────────────────────────────
+
+  ipcMain.handle(
+    'allocations:list',
+    async (_e, contract_id: number): Promise<IpcResponse<ContractAllocation[]>> => {
+      try {
+        const db = getDb()
+        const rows = db
+          .prepare(
+            `SELECT ca.*,
+               br.name as branch_name, br.number as branch_number,
+               d.name as department_name
+             FROM contract_allocations ca
+             LEFT JOIN branches br ON ca.branch_id = br.id
+             LEFT JOIN departments d ON ca.department_id = d.id
+             WHERE ca.contract_id = ?
+             ORDER BY ca.id`
+          )
+          .all(contract_id) as ContractAllocation[]
+        return { success: true, data: rows }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'allocations:save',
+    async (
+      _e,
+      contract_id: number,
+      allocations: Omit<ContractAllocation, 'id' | 'created_at'>[]
+    ): Promise<IpcResponse<void>> => {
+      try {
+        const db = getDb()
+        db.transaction(() => {
+          db.prepare('DELETE FROM contract_allocations WHERE contract_id = ?').run(contract_id)
+          const ins = db.prepare(
+            `INSERT INTO contract_allocations
+               (contract_id, branch_id, department_id, allocation_type, value)
+             VALUES (?, ?, ?, ?, ?)`
+          )
+          for (const a of allocations) {
+            ins.run(contract_id, a.branch_id ?? null, a.department_id ?? null, a.allocation_type, a.value)
+          }
+        })()
+        return { success: true }
       } catch (err: any) {
         return { success: false, error: err.message }
       }

@@ -146,6 +146,7 @@ function runMigrations(): void {
 
   // Run incremental migrations
   runV1Migration()
+  runV2Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -259,6 +260,30 @@ function runV1Migration(): void {
 
   // Mark migration complete
   db.pragma('user_version = 1')
+}
+
+function runV2Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 2) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS contract_allocations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE,
+      department_id INTEGER REFERENCES departments(id) ON DELETE CASCADE,
+      allocation_type TEXT NOT NULL DEFAULT 'percentage'
+        CHECK(allocation_type IN ('percentage', 'fixed')),
+      value REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      CHECK(
+        (branch_id IS NOT NULL AND department_id IS NULL) OR
+        (branch_id IS NULL AND department_id IS NOT NULL)
+      )
+    );
+  `)
+
+  db.pragma('user_version = 2')
 }
 
 export function updateContractStatuses(): void {

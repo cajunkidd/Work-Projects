@@ -102,5 +102,12 @@ contextBridge.exposeInMainWorld('api', {
   dashboard: {
     spendTrend: (opts: any) => ipcRenderer.invoke('dashboard:spendTrend', opts),
     upcomingRenewals: () => ipcRenderer.invoke('scheduler:upcomingRenewals')
+  },
+
+  // IT Contract Allocations
+  allocations: {
+    list: (contract_id: number) => ipcRenderer.invoke('allocations:list', contract_id),
+    save: (contract_id: number, allocations: any[]) =>
+      ipcRenderer.invoke('allocations:save', contract_id, allocations)
   }
 })

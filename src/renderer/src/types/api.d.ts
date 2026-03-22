@@ -7,6 +7,7 @@ import type {
   Budget,
   BudgetSummary,
   Contract,
+  ContractAllocation,
   ContractLineItem,
   RenewalHistory,
   CompetitorOffering,
@@ -101,6 +102,10 @@ declare global {
       dashboard: {
         spendTrend: (opts: any) => Promise<IpcResponse<{ month: string; amount: number }[]>>
         upcomingRenewals: () => Promise<IpcResponse<any[]>>
+      }
+      allocations: {
+        list: (contract_id: number) => Promise<IpcResponse<ContractAllocation[]>>
+        save: (contract_id: number, allocations: Omit<ContractAllocation, 'id' | 'created_at'>[]) => Promise<IpcResponse<void>>
       }
     }
   }

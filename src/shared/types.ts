@@ -57,6 +57,21 @@ export interface BudgetSummary {
   remaining: number
 }
 
+// ─── Contract Allocations ────────────────────────────────────────────────────
+
+export interface ContractAllocation {
+  id: number
+  contract_id: number
+  branch_id: number | null
+  branch_name?: string | null
+  branch_number?: number | null
+  department_id: number | null
+  department_name?: string | null
+  allocation_type: 'percentage' | 'fixed'
+  value: number
+  created_at: string
+}
+
 // ─── Contracts ──────────────────────────────────────────────────────────────
 
 export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'pending'

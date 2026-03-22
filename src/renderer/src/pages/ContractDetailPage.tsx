@@ -13,10 +13,12 @@ import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
 import type {
-  Contract, ContractLineItem, RenewalHistory, VendorNote, VendorProject, CompetitorOffering
+  Contract, ContractLineItem, RenewalHistory, VendorNote, VendorProject, CompetitorOffering,
+  ContractAllocation
 } from '../../../shared/types'
+import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 
-const tabs = ['Overview', 'Line Items', 'Renewals', 'Notes', 'Projects', 'Competitors']
+const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Notes', 'Projects', 'Competitors']
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -43,6 +45,14 @@ export default function ContractDetailPage() {
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [showCompetitorModal, setShowCompetitorModal] = useState(false)
 
+  // Allocations (IT contracts only)
+  const [allocations, setAllocations] = useState<ContractAllocation[]>([])
+  const [editingAllocations, setEditingAllocations] = useState(false)
+  const [draftAllocations, setDraftAllocations] = useState<AllocationRow[]>([])
+  const [savingAllocations, setSavingAllocations] = useState(false)
+  const [allBranches, setAllBranches] = useState<import('../../../shared/types').Branch[]>([])
+  const [allDepartments, setAllDepartments] = useState<import('../../../shared/types').Department[]>([])
+
   // Forms
   const [renewalForm, setRenewalForm] = useState({ renewal_date: '', prev_cost: '', new_cost: '', license_count_change: '0', reason: '' })
   const [noteText, setNoteText] = useState('')
@@ -67,6 +77,15 @@ export default function ContractDetailPage() {
     })
     window.api.competitors.list(contractId).then((res) => {
       if (res.success && res.data) setCompetitors(res.data)
+    })
+    window.api.allocations.list(contractId).then((res) => {
+      if (res.success && res.data) setAllocations(res.data)
+    })
+    window.api.branches.list().then((res) => {
+      if (res.success && res.data) setAllBranches(res.data)
+    })
+    window.api.departments.list().then((res) => {
+      if (res.success && res.data) setAllDepartments(res.data)
     })
   }, [contractId])
 
@@ -143,6 +162,28 @@ export default function ContractDetailPage() {
     if (res.success && res.data) setCompetitors(res.data)
     setShowCompetitorModal(false)
     setCompetitorForm({ competitor_vendor: '', offering_name: '', price: '', notes: '' })
+  }
+
+  const isITContract = contract?.department_name?.toLowerCase() === 'it'
+  const tabs = isITContract ? [...BASE_TABS, 'Allocations'] : BASE_TABS
+
+  const saveAllocations = async () => {
+    if (!contract) return
+    setSavingAllocations(true)
+    const toSave = draftAllocations
+      .filter((r) => r.targetId && r.value)
+      .map((r) => ({
+        contract_id: contract.id,
+        branch_id: r.target === 'branch' ? parseInt(r.targetId) : null,
+        department_id: r.target === 'department' ? parseInt(r.targetId) : null,
+        allocation_type: r.allocationType,
+        value: parseFloat(r.value)
+      }))
+    await window.api.allocations.save(contract.id, toSave)
+    const res = await window.api.allocations.list(contract.id)
+    if (res.success && res.data) setAllocations(res.data)
+    setSavingAllocations(false)
+    setEditingAllocations(false)
   }
 
   if (!contract) {
@@ -451,6 +492,114 @@ export default function ContractDetailPage() {
             </Card>
           )}
         </div>
+      )}
+
+      {activeTab === 'Allocations' && isITContract && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <p className="text-white font-semibold">Cost Allocations</p>
+              <p className="text-slate-400 text-xs mt-0.5">
+                Split this IT contract's cost across branches/departments.
+              </p>
+            </div>
+            <RoleGuard minRole="super_admin">
+              {!editingAllocations ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setDraftAllocations(
+                      allocations.map((a) => ({
+                        target: a.branch_id !== null ? 'branch' : 'department',
+                        targetId: String(a.branch_id ?? a.department_id ?? ''),
+                        allocationType: a.allocation_type,
+                        value: String(a.value)
+                      }))
+                    )
+                    setEditingAllocations(true)
+                  }}
+                >
+                  {allocations.length > 0 ? 'Edit Allocations' : 'Add Allocations'}
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Button onClick={saveAllocations} disabled={savingAllocations}>
+                    {savingAllocations ? 'Saving...' : 'Save'}
+                  </Button>
+                  <Button variant="secondary" onClick={() => setEditingAllocations(false)}>Cancel</Button>
+                </div>
+              )}
+            </RoleGuard>
+          </div>
+
+          {editingAllocations ? (
+            <AllocationEditor
+              allocations={draftAllocations}
+              onChange={setDraftAllocations}
+              branches={allBranches}
+              departments={allDepartments}
+              annualCost={contract.annual_cost}
+            />
+          ) : allocations.length === 0 ? (
+            <p className="text-slate-400 text-sm">
+              No allocations set — full cost is charged to IT department.
+            </p>
+          ) : (
+            <div>
+              {/* Column headers */}
+              <div className="grid grid-cols-12 gap-3 pb-2 border-b border-slate-700 mb-1">
+                <span className="col-span-4 text-slate-500 text-xs uppercase tracking-wide">Recipient</span>
+                <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide">Type</span>
+                <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide text-right">Allocation</span>
+                <span className="col-span-4 text-slate-500 text-xs uppercase tracking-wide text-right">Annual Amount</span>
+              </div>
+              {allocations.map((a) => {
+                const name = a.branch_id !== null
+                  ? `#${a.branch_number ?? ''} – ${a.branch_name}`
+                  : a.department_name
+                const amount = a.allocation_type === 'percentage'
+                  ? contract.annual_cost * a.value / 100
+                  : a.value
+                return (
+                  <div key={a.id} className="grid grid-cols-12 gap-3 items-center py-2.5 border-b border-slate-800 last:border-0">
+                    <div className="col-span-4 flex items-center gap-2">
+                      <span className="text-white text-sm">{name}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                        a.branch_id !== null ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'
+                      }`}>
+                        {a.branch_id !== null ? 'Branch' : 'Dept'}
+                      </span>
+                    </div>
+                    <div className="col-span-2">
+                      <span className="text-slate-400 text-xs">{a.allocation_type === 'percentage' ? 'Percentage' : 'Fixed Amount'}</span>
+                    </div>
+                    <div className="col-span-2 text-right">
+                      <span className="text-white text-sm font-medium">
+                        {a.allocation_type === 'percentage' ? `${a.value}%` : fmt(a.value)}
+                      </span>
+                    </div>
+                    <div className="col-span-4 text-right">
+                      <span className="text-emerald-400 text-sm font-medium">{fmt(amount)}/yr</span>
+                    </div>
+                  </div>
+                )
+              })}
+              {/* Total row */}
+              {allocations.some((a) => a.allocation_type === 'percentage') && (
+                <div className="grid grid-cols-12 gap-3 items-center pt-3 mt-1 border-t border-slate-700">
+                  <span className="col-span-4 text-slate-400 text-xs">Total allocated</span>
+                  <span className="col-span-2"></span>
+                  <span className="col-span-2 text-right text-slate-300 text-sm font-medium">
+                    {allocations.filter(a => a.allocation_type === 'percentage').reduce((s, a) => s + a.value, 0).toFixed(1)}%
+                  </span>
+                  <span className="col-span-4 text-right text-slate-300 text-sm font-medium">
+                    {fmt(allocations.reduce((s, a) => s + (a.allocation_type === 'percentage' ? contract.annual_cost * a.value / 100 : a.value), 0))}/yr
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
       )}
 
       {/* Modals */}

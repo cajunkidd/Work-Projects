@@ -10,6 +10,7 @@ import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
 import type { Contract, Department, Branch } from '../../../shared/types'
+import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 
 function statusVariant(s: string) {
   return s === 'active' ? 'success' : s === 'expiring_soon' ? 'warning' : s === 'expired' ? 'danger' : 'neutral'
@@ -41,6 +42,8 @@ export default function ContractsPage() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
+  const [needsAllocation, setNeedsAllocation] = useState(false)
+  const [allocations, setAllocations] = useState<AllocationRow[]>([])
 
   const load = () => {
     if (!user) return
@@ -106,11 +109,25 @@ export default function ContractsPage() {
       file_path: form.file_path || null
     }
     const res = await window.api.contracts.create(payload)
+    if (res.success && res.data && needsAllocation && allocations.length > 0) {
+      const toSave = allocations
+        .filter((r) => r.targetId && r.value)
+        .map((r) => ({
+          contract_id: res.data!.id,
+          branch_id: r.target === 'branch' ? parseInt(r.targetId) : null,
+          department_id: r.target === 'department' ? parseInt(r.targetId) : null,
+          allocation_type: r.allocationType,
+          value: parseFloat(r.value)
+        }))
+      if (toSave.length > 0) await window.api.allocations.save(res.data.id, toSave)
+    }
     setSaving(false)
     if (res.success) {
       setShowModal(false)
       setForm(emptyForm)
       setUploadedFile(null)
+      setNeedsAllocation(false)
+      setAllocations([])
       load()
     }
   }
@@ -181,7 +198,7 @@ export default function ContractsPage() {
       </div>
 
       {/* New Contract Modal */}
-      <Modal open={showModal} onClose={() => setShowModal(false)} title="New Contract" width="max-w-2xl">
+      <Modal open={showModal} onClose={() => { setShowModal(false); setNeedsAllocation(false); setAllocations([]) }} title="New Contract" width="max-w-2xl">
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <Input label="Vendor Name" value={form.vendor_name} onChange={(e) => f('vendor_name', e.target.value)} required />
@@ -199,7 +216,7 @@ export default function ContractsPage() {
             <Select
               label="Department"
               value={form.department_id}
-              onChange={(e) => f('department_id', e.target.value)}
+              onChange={(e) => { f('department_id', e.target.value); setNeedsAllocation(false); setAllocations([]) }}
               options={departments.map((d) => ({ value: d.id, label: d.name }))}
               required
             />
@@ -212,6 +229,54 @@ export default function ContractsPage() {
               required
             />
           )}
+
+          {/* IT allocation prompt — only shown for IT department contracts */}
+          {(() => {
+            const selectedDept = departments.find((d) => d.id === parseInt(form.department_id))
+            if (form.scope !== 'department' || selectedDept?.name.toLowerCase() !== 'it') return null
+            const annualCost = parseFloat(form.annual_cost) || parseFloat(form.monthly_cost) * 12 || 0
+            return (
+              <div className="rounded-lg border border-blue-800/60 p-4 space-y-3 bg-blue-950/20">
+                <p className="text-blue-300 text-sm font-medium">
+                  IT Contract — Cost Allocation
+                </p>
+                <p className="text-slate-400 text-xs">
+                  Does this contract need to be split across branches or departments (e.g. company-wide anti-virus, network protection)?
+                </p>
+                <div className="flex gap-6">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="needsAllocation"
+                      checked={!needsAllocation}
+                      onChange={() => { setNeedsAllocation(false); setAllocations([]) }}
+                      className="accent-blue-500"
+                    />
+                    <span className="text-slate-300 text-sm">No — charge entirely to IT</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="needsAllocation"
+                      checked={needsAllocation}
+                      onChange={() => setNeedsAllocation(true)}
+                      className="accent-blue-500"
+                    />
+                    <span className="text-slate-300 text-sm">Yes — split across branches/departments</span>
+                  </label>
+                </div>
+                {needsAllocation && (
+                  <AllocationEditor
+                    allocations={allocations}
+                    onChange={setAllocations}
+                    branches={branches}
+                    departments={departments}
+                    annualCost={annualCost}
+                  />
+                )}
+              </div>
+            )
+          })()}
           <div className="grid grid-cols-2 gap-4">
             <Input label="Start Date" type="date" value={form.start_date} onChange={(e) => f('start_date', e.target.value)} required />
             <Input label="End Date" type="date" value={form.end_date} onChange={(e) => f('end_date', e.target.value)} required />
@@ -240,7 +305,7 @@ export default function ContractsPage() {
             <Button type="submit" disabled={saving} className="flex-1 justify-center">
               {saving ? 'Saving...' : 'Save Contract'}
             </Button>
-            <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button type="button" variant="secondary" onClick={() => { setShowModal(false); setNeedsAllocation(false); setAllocations([]) }}>Cancel</Button>
           </div>
         </form>
       </Modal>
