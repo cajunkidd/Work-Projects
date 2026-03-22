@@ -230,15 +230,15 @@ export default function ContractsPage() {
             />
           )}
 
-          {/* IT allocation prompt — only shown for IT department contracts */}
+          {/* Cost allocation prompt — shown for all department contracts */}
           {(() => {
             const selectedDept = departments.find((d) => d.id === parseInt(form.department_id))
-            if (form.scope !== 'department' || selectedDept?.name.toLowerCase() !== 'it') return null
+            if (form.scope !== 'department' || !selectedDept) return null
             const annualCost = parseFloat(form.annual_cost) || parseFloat(form.monthly_cost) * 12 || 0
             return (
               <div className="rounded-lg border border-blue-800/60 p-4 space-y-3 bg-blue-950/20">
                 <p className="text-blue-300 text-sm font-medium">
-                  IT Contract — Cost Allocation
+                  {selectedDept.name} Contract — Cost Allocation
                 </p>
                 <p className="text-slate-400 text-xs">
                   Does this contract need to be split across branches or departments (e.g. company-wide anti-virus, network protection)?

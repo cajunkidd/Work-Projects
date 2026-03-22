@@ -164,8 +164,8 @@ export default function ContractDetailPage() {
     setCompetitorForm({ competitor_vendor: '', offering_name: '', price: '', notes: '' })
   }
 
-  const isITContract = contract?.department_name?.toLowerCase() === 'it'
-  const tabs = isITContract ? [...BASE_TABS, 'Allocations'] : BASE_TABS
+  const isDeptContract = contract?.department_id !== null && contract?.branch_id === null
+  const tabs = isDeptContract ? [...BASE_TABS, 'Allocations'] : BASE_TABS
 
   const saveAllocations = async () => {
     if (!contract) return
@@ -494,7 +494,7 @@ export default function ContractDetailPage() {
         </div>
       )}
 
-      {activeTab === 'Allocations' && isITContract && (
+      {activeTab === 'Allocations' && isDeptContract && (
         <Card>
           <div className="flex items-center justify-between mb-4">
             <div>
