@@ -106,9 +106,12 @@ export function registerSettingsHandlers(): void {
           const r = parseInt(normalized.slice(1, 3), 16)
           const g = parseInt(normalized.slice(3, 5), 16)
           const b = parseInt(normalized.slice(5, 7), 16)
-          // Skip near-white, near-black, and duplicates
-          if (r > 230 && g > 230 && b > 230) continue
-          if (r < 25 && g < 25 && b < 25) continue
+          // Skip near-white, near-black, low-saturation (backgrounds/grays)
+          if (r > 210 && g > 210 && b > 210) continue
+          if (r < 30 && g < 30 && b < 30) continue
+          const maxC = Math.max(r, g, b)
+          const minC = Math.min(r, g, b)
+          if (maxC === 0 || (maxC - minC) / maxC < 0.2) continue
           if (seen.has(normalized)) continue
           seen.add(normalized)
           svgColors.push(normalized)
@@ -149,8 +152,14 @@ export function registerSettingsHandlers(): void {
         const r = bitmap[i + 2]
         const a = bitmap[i + 3]
         if (a < 128) continue
-        if (r > 230 && g > 230 && b > 230) continue // near-white
-        if (r < 25 && g < 25 && b < 25) continue    // near-black
+        // Skip near-white and near-black by brightness
+        if (r > 210 && g > 210 && b > 210) continue
+        if (r < 30 && g < 30 && b < 30) continue
+        // Skip low-saturation pixels (grays, off-whites, beiges — backgrounds)
+        // Saturation in HSV = (max - min) / max; brand colors typically > 0.2
+        const maxC = Math.max(r, g, b)
+        const minC = Math.min(r, g, b)
+        if (maxC === 0 || (maxC - minC) / maxC < 0.2) continue
         // Quantize to 32-step increments for color clustering
         const qr = Math.min(224, Math.round(r / 32) * 32)
         const qg = Math.min(224, Math.round(g / 32) * 32)
