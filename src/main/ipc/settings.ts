@@ -75,66 +75,86 @@ export function registerSettingsHandlers(): void {
     }
   })
 
-  // Extract brand colors from logo using PNG pixel sampling
+  // Extract brand colors from logo using Electron's nativeImage (no native module issues)
   ipcMain.handle('settings:extractColors', async (_e, imagePath: string): Promise<IpcResponse<{
     primary: string
     secondary: string
     palette: string[]
   }>> => {
+    const defaults = {
+      primary: '#2563eb',
+      secondary: '#1e40af',
+      palette: ['#2563eb', '#1e40af', '#3b82f6', '#93c5fd', '#eff6ff']
+    }
+
     try {
       const fs = await import('fs')
       if (!fs.existsSync(imagePath)) {
         return { success: false, error: 'Image not found' }
       }
 
-      // For SVG or unsupported formats, return defaults
       const ext = path.extname(imagePath).toLowerCase()
+
+      // SVG: parse hex color values directly from the XML
       if (ext === '.svg') {
-        return {
-          success: true,
-          data: {
-            primary: '#2563eb',
-            secondary: '#1e40af',
-            palette: ['#2563eb', '#1e40af', '#3b82f6', '#93c5fd', '#eff6ff']
+        const text = fs.readFileSync(imagePath, 'utf8')
+        const matches = text.match(/#([0-9a-fA-F]{6})\b/g) ?? []
+        const seen = new Set<string>()
+        const svgColors: string[] = []
+        for (const hex of matches) {
+          const normalized = hex.toLowerCase()
+          const r = parseInt(normalized.slice(1, 3), 16)
+          const g = parseInt(normalized.slice(3, 5), 16)
+          const b = parseInt(normalized.slice(5, 7), 16)
+          // Skip near-white, near-black, and duplicates
+          if (r > 230 && g > 230 && b > 230) continue
+          if (r < 25 && g < 25 && b < 25) continue
+          if (seen.has(normalized)) continue
+          seen.add(normalized)
+          svgColors.push(normalized)
+        }
+        if (svgColors.length >= 1) {
+          return {
+            success: true,
+            data: {
+              primary: svgColors[0],
+              secondary: svgColors[1] ?? svgColors[0],
+              palette: svgColors.slice(0, 5)
+            }
           }
         }
+        return { success: true, data: defaults }
       }
 
-      // Use PNG/raw pixel approach via the 'sharp' package if available,
-      // otherwise fall back to a sensible default palette.
-      const sharp = await import('sharp').catch(() => null)
-      if (!sharp) {
-        return {
-          success: true,
-          data: {
-            primary: '#2563eb',
-            secondary: '#1e40af',
-            palette: ['#2563eb', '#1e40af', '#3b82f6', '#93c5fd', '#eff6ff']
-          }
-        }
-      }
+      // Raster images: use Electron's built-in nativeImage — no native module needed
+      const { nativeImage } = await import('electron')
+      const img = nativeImage.createFromPath(imagePath)
+      if (img.isEmpty()) return { success: true, data: defaults }
 
-      const { data, info } = await sharp.default(imagePath)
-        .resize(50, 50, { fit: 'inside' })
-        .raw()
-        .toBuffer({ resolveWithObject: true })
+      // Scale down to max 50px on longest side for fast pixel sampling
+      const origSize = img.getSize()
+      const scale = Math.min(1, 50 / Math.max(origSize.width, origSize.height))
+      const small = img.resize({
+        width: Math.max(1, Math.round(origSize.width * scale)),
+        height: Math.max(1, Math.round(origSize.height * scale))
+      })
 
-      const channels = info.channels // 3 = RGB, 4 = RGBA
-      const colorCounts: Map<string, number> = new Map()
+      // toBitmap() returns raw pixels in BGRA order, 4 bytes per pixel
+      const bitmap = small.toBitmap()
+      const colorCounts = new Map<string, number>()
 
-      for (let i = 0; i < data.length; i += channels) {
-        const r = data[i]
-        const g = data[i + 1]
-        const b = data[i + 2]
-        const a = channels === 4 ? data[i + 3] : 255
-        if (a < 128) continue // skip transparent
-        // Skip near-white and near-black
-        if (r > 230 && g > 230 && b > 230) continue
-        if (r < 25 && g < 25 && b < 25) continue
-        // Quantize (capped at 255 to prevent invalid hex like #100xxxx)
-        const qr = Math.min(255, Math.round(r / 32) * 32)
-        const qg = Math.min(255, Math.round(g / 32) * 32)
-        const qb = Math.min(255, Math.round(b / 32) * 32)
+      for (let i = 0; i < bitmap.length; i += 4) {
+        const b = bitmap[i]
+        const g = bitmap[i + 1]
+        const r = bitmap[i + 2]
+        const a = bitmap[i + 3]
+        if (a < 128) continue
+        if (r > 230 && g > 230 && b > 230) continue // near-white
+        if (r < 25 && g < 25 && b < 25) continue    // near-black
+        // Quantize to 32-step increments for color clustering
+        const qr = Math.min(224, Math.round(r / 32) * 32)
+        const qg = Math.min(224, Math.round(g / 32) * 32)
+        const qb = Math.min(224, Math.round(b / 32) * 32)
         const hex = `#${qr.toString(16).padStart(2, '0')}${qg.toString(16).padStart(2, '0')}${qb.toString(16).padStart(2, '0')}`
         colorCounts.set(hex, (colorCounts.get(hex) || 0) + 1)
       }
@@ -143,21 +163,18 @@ export function registerSettingsHandlers(): void {
         .sort((a, b) => b[1] - a[1])
         .map(([hex]) => hex)
 
-      const primary = sorted[0] || '#2563eb'
-      const secondary = sorted[1] || '#1e40af'
-      const palette = sorted.slice(0, 5).length > 0 ? sorted.slice(0, 5) : ['#2563eb', '#1e40af', '#3b82f6', '#93c5fd', '#eff6ff']
+      if (sorted.length === 0) return { success: true, data: defaults }
 
-      return { success: true, data: { primary, secondary, palette } }
-    } catch (err: any) {
-      // Color extraction is non-critical — return a default palette
       return {
         success: true,
         data: {
-          primary: '#2563eb',
-          secondary: '#1e40af',
-          palette: ['#2563eb', '#1e40af', '#3b82f6', '#93c5fd', '#eff6ff']
+          primary: sorted[0],
+          secondary: sorted[1] ?? sorted[0],
+          palette: sorted.slice(0, 5)
         }
       }
+    } catch (err: any) {
+      return { success: true, data: defaults }
     }
   })
 
