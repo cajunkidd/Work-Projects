@@ -1,8 +1,4 @@
 import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
-
-// Fix: Disable GPU disk cache to prevent "Access is denied" errors on Windows
-app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
-app.commandLine.appendSwitch('disable-gpu-cache')
 import path from 'path'
 import { pathToFileURL } from 'url'
 import { initDatabase, updateContractStatuses } from './database'
@@ -20,6 +16,17 @@ import { registerAssetHandlers } from './ipc/assets'
 import { registerExportHandlers } from './ipc/exports'
 import { registerContractCreationHandlers } from './ipc/contractCreation'
 import { startScheduler, getUpcomingRenewals } from './scheduler'
+
+// Prevent Windows "Access is denied" GPU cache errors.
+// These must be called before app.whenReady().
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+app.commandLine.appendSwitch('in-process-gpu')
+
+// Enforce single instance — a second running instance causes the first
+// instance's GPU cache directory to be locked, triggering the move error.
+if (!app.requestSingleInstanceLock()) {
+  app.quit()
+}
 
 let mainWindow: BrowserWindow | null = null
 
@@ -99,6 +106,13 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+})
+
+app.on('second-instance', () => {
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.focus()
+  }
 })
 
 app.on('window-all-closed', () => {
