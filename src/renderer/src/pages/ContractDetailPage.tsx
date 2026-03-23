@@ -51,6 +51,7 @@ export default function ContractDetailPage() {
   const [draftAllocations, setDraftAllocations] = useState<AllocationRow[]>([])
   const [savingAllocations, setSavingAllocations] = useState(false)
   const [assetSummary, setAssetSummary] = useState<{ totalMachines: number; branchCount: number } | null>(null)
+  const [exportMsg, setExportMsg] = useState('')
   const [allBranches, setAllBranches] = useState<import('../../../shared/types').Branch[]>([])
   const [allDepartments, setAllDepartments] = useState<import('../../../shared/types').Department[]>([])
 
@@ -220,6 +221,26 @@ export default function ContractDetailPage() {
     setAssetSummary({ totalMachines: grandTotal, branchCount: active.length })
   }
 
+  const handleExport = async () => {
+    if (!contract) return
+    const res = await window.api.exports.contractDetail({
+      contract,
+      lineItems,
+      renewals,
+      notes,
+      projects,
+      competitors,
+      allocations
+    })
+    if (res.success) {
+      setExportMsg('Exported!')
+      setTimeout(() => setExportMsg(''), 3000)
+    } else if (res.error !== 'Cancelled') {
+      setExportMsg(`Error: ${res.error}`)
+      setTimeout(() => setExportMsg(''), 4000)
+    }
+  }
+
   if (!contract) {
     return <div className="text-slate-400 text-center py-20">Loading...</div>
   }
@@ -251,9 +272,13 @@ export default function ContractDetailPage() {
             )}
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right space-y-2">
           <p className="text-white text-2xl font-bold">{fmt(contract.annual_cost)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
           <p className="text-slate-400">{fmt(contract.monthly_cost)}/mo</p>
+          <div className="flex items-center justify-end gap-2">
+            {exportMsg && <span className={`text-xs ${exportMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{exportMsg}</span>}
+            <Button variant="ghost" onClick={handleExport}>Export</Button>
+          </div>
         </div>
       </div>
 

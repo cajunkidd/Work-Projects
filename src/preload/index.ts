@@ -119,5 +119,12 @@ contextBridge.exposeInMainWorld('api', {
     list: (contract_id: number) => ipcRenderer.invoke('allocations:list', contract_id),
     save: (contract_id: number, allocations: any[]) =>
       ipcRenderer.invoke('allocations:save', contract_id, allocations)
+  },
+
+  // Exports
+  exports: {
+    invoices: (data: any[]) => ipcRenderer.invoke('exports:invoices', data),
+    contractsList: (data: any[]) => ipcRenderer.invoke('exports:contractsList', data),
+    contractDetail: (payload: any) => ipcRenderer.invoke('exports:contractDetail', payload)
   }
 })

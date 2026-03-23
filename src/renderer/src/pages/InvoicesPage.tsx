@@ -49,6 +49,18 @@ export default function InvoicesPage() {
 
   const discrepancies = invoices.filter((i) => i.amount > (i.budgeted_amount || 0) * 1.05)
 
+  const [exportMsg, setExportMsg] = useState('')
+  const handleExport = async () => {
+    const res = await window.api.exports.invoices(invoices)
+    if (res.success) {
+      setExportMsg('Exported!')
+      setTimeout(() => setExportMsg(''), 3000)
+    } else if (res.error !== 'Cancelled') {
+      setExportMsg(`Error: ${res.error}`)
+      setTimeout(() => setExportMsg(''), 4000)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -56,14 +68,18 @@ export default function InvoicesPage() {
           <h1 className="text-white text-2xl font-bold">Invoices</h1>
           <p className="text-slate-400 text-sm">{invoices.length} invoices · {discrepancies.length} over budget</p>
         </div>
-        <RoleGuard minRole="admin">
-          <div className="flex items-center gap-3">
-            {pollMsg && <span className="text-sm text-slate-300">{pollMsg}</span>}
-            <Button onClick={handlePoll} disabled={polling} variant="secondary">
-              {polling ? 'Polling...' : '🔄 Sync Gmail'}
-            </Button>
-          </div>
-        </RoleGuard>
+        <div className="flex items-center gap-3">
+          {exportMsg && <span className={`text-sm ${exportMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{exportMsg}</span>}
+          <Button variant="ghost" onClick={handleExport} disabled={invoices.length === 0}>Export</Button>
+          <RoleGuard minRole="admin">
+            <div className="flex items-center gap-3">
+              {pollMsg && <span className="text-sm text-slate-300">{pollMsg}</span>}
+              <Button onClick={handlePoll} disabled={polling} variant="secondary">
+                {polling ? 'Polling...' : '🔄 Sync Gmail'}
+              </Button>
+            </div>
+          </RoleGuard>
+        </div>
       </div>
 
       {/* Discrepancy alert */}

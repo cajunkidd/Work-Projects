@@ -106,6 +106,7 @@ export default function ContractsPage() {
   const [filters, setFilters] = useState(emptyFilters)
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
+  const [exportMsg, setExportMsg] = useState('')
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
@@ -236,6 +237,18 @@ export default function ContractsPage() {
     })
   }, [contracts, filters])
 
+  const handleExport = async () => {
+    const data = activeTab === 'search' ? filteredContracts : contracts
+    const res = await window.api.exports.contractsList(data)
+    if (res.success) {
+      setExportMsg('Exported!')
+      setTimeout(() => setExportMsg(''), 3000)
+    } else if (res.error !== 'Cancelled') {
+      setExportMsg(`Error: ${res.error}`)
+      setTimeout(() => setExportMsg(''), 4000)
+    }
+  }
+
   const hasActiveFilters = filters.vendor || filters.pocName || filters.status.length > 0 ||
     filters.costOp !== 'any' || filters.startFrom || filters.startTo ||
     filters.endFrom || filters.endTo || filters.department_id || filters.branch_id || filters.renewalWithin
@@ -251,6 +264,8 @@ export default function ContractsPage() {
           <p className="text-slate-400 text-sm">{contracts.length} contracts</p>
         </div>
         <div className="flex items-center gap-2">
+          {exportMsg && <span className={`text-sm ${exportMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{exportMsg}</span>}
+          <Button variant="ghost" onClick={handleExport} disabled={contracts.length === 0}>Export</Button>
           <Button variant="secondary" onClick={() => setShowImportModal(true)}>↑ Import Contracts</Button>
           <RoleGuard minRole="super_admin">
             <Button onClick={() => setShowModal(true)}>+ New Contract</Button>
