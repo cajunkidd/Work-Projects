@@ -191,9 +191,13 @@ export default function ContractDetailPage() {
     const res = await window.api.assets.list()
     if (!res.success || !res.data) return
 
-    // Aggregate total devices per branch
+    // Only computers, thin clients, and servers count toward per-machine contract allocations.
+    // Printers and Ingenicos are excluded.
+    const CONTRACT_TYPES = new Set(['computer', 'thin_client', 'server'])
+
     const branchTotals = new Map<string, { name: string; total: number }>()
     for (const a of res.data) {
+      if (!CONTRACT_TYPES.has(a.asset_type)) continue
       const key = String(a.branch_id)
       const entry = branchTotals.get(key) ?? { name: `#${a.branch_number ?? ''} – ${a.branch_name ?? ''}`, total: 0 }
       entry.total += a.count

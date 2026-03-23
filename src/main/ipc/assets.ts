@@ -2,7 +2,7 @@ import { ipcMain, dialog } from 'electron'
 import { getDb } from '../database'
 import type { IpcResponse, BranchAsset } from '../../shared/types'
 
-const ASSET_TYPES = ['computer', 'thin_client', 'server'] as const
+const ASSET_TYPES = ['computer', 'thin_client', 'server', 'printer', 'ingenico'] as const
 
 export function registerAssetHandlers(): void {
   // List all branch assets — returns one row per branch per asset type (0 count if not set)
@@ -64,7 +64,7 @@ export function registerAssetHandlers(): void {
 
   // Import from Excel / CSV
   ipcMain.handle('assets:importFile', async (): Promise<IpcResponse<{
-    rows: { branch_id: number | null; branch_raw: string; computers: number; thin_clients: number; servers: number }[]
+    rows: { branch_id: number | null; branch_raw: string; computers: number; thin_clients: number; servers: number; printers: number; ingenicos: number }[]
     unmapped: string[]
   }>> => {
     try {
@@ -92,6 +92,8 @@ export function registerAssetHandlers(): void {
       const COMPUTER_ALIASES = ['computers', 'computer', 'pcs', 'desktops', 'workstations', 'pc count', 'pc']
       const TC_ALIASES = ['thin clients', 'thin client', 'tc', 'thin', 'tc count', 'thin_clients', 'thinclients']
       const SERVER_ALIASES = ['servers', 'server', 'svr', 'server count', 'server_count']
+      const PRINTER_ALIASES = ['printers', 'printer', 'print', 'printer count', 'printers count']
+      const INGENICO_ALIASES = ['ingenico', 'ingenicos', 'ingenico count', 'terminals', 'terminal', 'payment terminal', 'payment terminals', 'pos', 'pos terminal']
       const BRANCH_ALIASES = ['branch', 'branch name', 'branch_name', 'location', 'store', 'site', 'branch number', 'branch_number']
 
       function findKey(headers: string[], aliases: string[]): string | null {
@@ -106,6 +108,8 @@ export function registerAssetHandlers(): void {
       const computerKey = findKey(headers, COMPUTER_ALIASES)
       const tcKey = findKey(headers, TC_ALIASES)
       const serverKey = findKey(headers, SERVER_ALIASES)
+      const printerKey = findKey(headers, PRINTER_ALIASES)
+      const ingenicoKey = findKey(headers, INGENICO_ALIASES)
 
       // If no explicit branch column, look for a column whose values are branch numbers
       let detectedBranchKey = branchKey
@@ -134,7 +138,7 @@ export function registerAssetHandlers(): void {
         return null
       }
 
-      const parsed: { branch_id: number | null; branch_raw: string; computers: number; thin_clients: number; servers: number }[] = []
+      const parsed: { branch_id: number | null; branch_raw: string; computers: number; thin_clients: number; servers: number; printers: number; ingenicos: number }[] = []
       const unmapped: string[] = []
 
       for (const row of raw) {
@@ -151,7 +155,9 @@ export function registerAssetHandlers(): void {
           branch_raw: branchRaw,
           computers: computerKey ? Math.max(0, parseInt(String(row[computerKey])) || 0) : 0,
           thin_clients: tcKey ? Math.max(0, parseInt(String(row[tcKey])) || 0) : 0,
-          servers: serverKey ? Math.max(0, parseInt(String(row[serverKey])) || 0) : 0
+          servers: serverKey ? Math.max(0, parseInt(String(row[serverKey])) || 0) : 0,
+          printers: printerKey ? Math.max(0, parseInt(String(row[printerKey])) || 0) : 0,
+          ingenicos: ingenicoKey ? Math.max(0, parseInt(String(row[ingenicoKey])) || 0) : 0
         })
       }
 

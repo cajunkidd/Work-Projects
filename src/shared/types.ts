@@ -74,7 +74,7 @@ export interface ContractAllocation {
 
 // ─── Branch Assets ───────────────────────────────────────────────────────────
 
-export type AssetType = 'computer' | 'thin_client' | 'server'
+export type AssetType = 'computer' | 'thin_client' | 'server' | 'printer' | 'ingenico'
 
 export interface BranchAsset {
   id?: number
