@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../store/themeStore'
 import { useAuthStore } from '../store/authStore'
@@ -31,6 +31,69 @@ const emptyForm = {
   file_path: ''
 }
 
+const emptyFilters = {
+  vendor: '',
+  pocName: '',
+  status: [] as string[],
+  costField: 'annual_cost' as 'annual_cost' | 'monthly_cost' | 'total_cost',
+  costOp: 'any' as 'any' | 'over' | 'under' | 'between',
+  costA: '',
+  costB: '',
+  startFrom: '', startTo: '',
+  endFrom: '', endTo: '',
+  department_id: '',
+  branch_id: '',
+  renewalWithin: '',
+}
+
+// Reusable contract card list
+function ContractList({ contracts, onNavigate }: { contracts: Contract[]; onNavigate: (id: number) => void }) {
+  if (contracts.length === 0) {
+    return (
+      <Card className="text-center py-12">
+        <p className="text-slate-400">No contracts found.</p>
+      </Card>
+    )
+  }
+  return (
+    <div className="space-y-3">
+      {contracts.map((c) => (
+        <Card key={c.id} onClick={() => onNavigate(c.id)} className="hover:border-slate-600">
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-white font-semibold">{c.vendor_name}</h3>
+                <Badge variant={statusVariant(c.status)}>
+                  {c.status.replace('_', ' ')}
+                </Badge>
+                {c.days_until_renewal !== undefined && c.days_until_renewal >= 0 && c.days_until_renewal <= 120 && (
+                  <Badge variant={c.days_until_renewal <= 30 ? 'danger' : 'warning'}>
+                    {c.days_until_renewal}d to renewal
+                  </Badge>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-4 text-sm text-slate-400">
+                {c.branch_name ? (
+                  <span>Branch: <span className="text-slate-300">{c.branch_name}</span></span>
+                ) : (
+                  <span>Dept: <span className="text-slate-300">{c.department_name}</span></span>
+                )}
+                <span>Start: <span className="text-slate-300">{c.start_date}</span></span>
+                <span>End: <span className="text-slate-300">{c.end_date}</span></span>
+                <span>POC: <span className="text-slate-300">{c.poc_name}</span></span>
+              </div>
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="text-white font-bold text-lg">{fmt(c.annual_cost)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
+              <p className="text-slate-400 text-sm">{fmt(c.monthly_cost)}/mo</p>
+            </div>
+          </div>
+        </Card>
+      ))}
+    </div>
+  )
+}
+
 export default function ContractsPage() {
   const navigate = useNavigate()
   const { selectedDeptId } = useThemeStore()
@@ -39,6 +102,8 @@ export default function ContractsPage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [search, setSearch] = useState('')
+  const [activeTab, setActiveTab] = useState<'list' | 'search'>('list')
+  const [filters, setFilters] = useState(emptyFilters)
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
@@ -52,10 +117,8 @@ export default function ContractsPage() {
     const opts: any = { search: search || undefined }
 
     if (user.role === 'super_admin') {
-      // Optional dept filter from sidebar
       if (selectedDeptId) opts.department_id = selectedDeptId
     } else {
-      // Pass role-based access info to the backend
       opts.role = user.role
       opts.allowed_department_ids = user.department_ids
       opts.allowed_branch_ids = user.branch_ids
@@ -76,9 +139,7 @@ export default function ContractsPage() {
       }
     })
     window.api.branches.list().then((res) => {
-      if (res.success && res.data) {
-        setBranches(res.data)
-      }
+      if (res.success && res.data) setBranches(res.data)
     })
   }, [])
 
@@ -135,9 +196,55 @@ export default function ContractsPage() {
   }
 
   const f = (k: string, v: string) => setForm((prev) => ({ ...prev, [k]: v }))
+  const setFilter = (k: keyof typeof emptyFilters, v: any) => setFilters((prev) => ({ ...prev, [k]: v }))
+
+  const toggleStatus = (s: string) =>
+    setFilters((prev) => ({
+      ...prev,
+      status: prev.status.includes(s) ? prev.status.filter((x) => x !== s) : [...prev.status, s]
+    }))
+
+  const filteredContracts = useMemo(() => {
+    return contracts.filter((c) => {
+      if (filters.vendor && !c.vendor_name.toLowerCase().includes(filters.vendor.toLowerCase())) return false
+      if (filters.pocName && !c.poc_name.toLowerCase().includes(filters.pocName.toLowerCase())) return false
+      if (filters.status.length > 0 && !filters.status.includes(c.status)) return false
+
+      const cost = (c as any)[filters.costField] as number
+      if (filters.costOp === 'over' && cost <= (parseFloat(filters.costA) || 0)) return false
+      if (filters.costOp === 'under' && cost >= (parseFloat(filters.costA) || 0)) return false
+      if (filters.costOp === 'between') {
+        const lo = parseFloat(filters.costA) || 0
+        const hi = parseFloat(filters.costB) || Infinity
+        if (cost < lo || cost > hi) return false
+      }
+
+      if (filters.startFrom && c.start_date < filters.startFrom) return false
+      if (filters.startTo && c.start_date > filters.startTo) return false
+      if (filters.endFrom && c.end_date < filters.endFrom) return false
+      if (filters.endTo && c.end_date > filters.endTo) return false
+
+      if (filters.department_id && c.department_id !== parseInt(filters.department_id)) return false
+      if (filters.branch_id && c.branch_id !== parseInt(filters.branch_id)) return false
+
+      if (filters.renewalWithin) {
+        const days = parseInt(filters.renewalWithin)
+        if (c.days_until_renewal == null || c.days_until_renewal < 0 || c.days_until_renewal > days) return false
+      }
+
+      return true
+    })
+  }, [contracts, filters])
+
+  const hasActiveFilters = filters.vendor || filters.pocName || filters.status.length > 0 ||
+    filters.costOp !== 'any' || filters.startFrom || filters.startTo ||
+    filters.endFrom || filters.endTo || filters.department_id || filters.branch_id || filters.renewalWithin
+
+  const inputCls = 'bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none w-full placeholder-slate-500'
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-white text-2xl font-bold">Contracts</h1>
@@ -151,56 +258,259 @@ export default function ContractsPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <Input
-        placeholder="Search by vendor or contact..."
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        className="max-w-sm"
-      />
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b border-slate-700">
+        {(['list', 'search'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px capitalize ${
+              activeTab === tab
+                ? 'text-white border-[var(--brand-primary)]'
+                : 'text-slate-400 border-transparent hover:text-slate-200'
+            }`}
+          >
+            {tab === 'list' ? 'Contracts' : 'Search'}
+          </button>
+        ))}
+      </div>
 
-      {/* Contracts list */}
-      <div className="space-y-3">
-        {contracts.length === 0 ? (
-          <Card className="text-center py-12">
-            <p className="text-slate-400">No contracts found.</p>
-          </Card>
-        ) : (
-          contracts.map((c) => (
-            <Card key={c.id} onClick={() => navigate(`/contracts/${c.id}`)} className="hover:border-slate-600">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="text-white font-semibold">{c.vendor_name}</h3>
-                    <Badge variant={statusVariant(c.status)}>
-                      {c.status.replace('_', ' ')}
-                    </Badge>
-                    {c.days_until_renewal !== undefined && c.days_until_renewal >= 0 && c.days_until_renewal <= 120 && (
-                      <Badge variant={c.days_until_renewal <= 30 ? 'danger' : 'warning'}>
-                        {c.days_until_renewal}d to renewal
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap gap-4 text-sm text-slate-400">
-                    {c.branch_name ? (
-                      <span>Branch: <span className="text-slate-300">{c.branch_name}</span></span>
-                    ) : (
-                      <span>Dept: <span className="text-slate-300">{c.department_name}</span></span>
-                    )}
-                    <span>Start: <span className="text-slate-300">{c.start_date}</span></span>
-                    <span>End: <span className="text-slate-300">{c.end_date}</span></span>
-                    <span>POC: <span className="text-slate-300">{c.poc_name}</span></span>
-                  </div>
+      {/* ------------------------------------------------------------------ */}
+      {/* Tab: Contracts (existing list)                                      */}
+      {/* ------------------------------------------------------------------ */}
+      {activeTab === 'list' && (
+        <>
+          <Input
+            placeholder="Search by vendor or contact..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="max-w-sm"
+          />
+          <ContractList contracts={contracts} onNavigate={(id) => navigate(`/contracts/${id}`)} />
+        </>
+      )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Tab: Search (advanced filters)                                      */}
+      {/* ------------------------------------------------------------------ */}
+      {activeTab === 'search' && (
+        <div className="grid grid-cols-[300px_1fr] gap-6 items-start">
+          {/* Filter panel */}
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-5 sticky top-4">
+            <div className="flex items-center justify-between">
+              <p className="text-white text-sm font-semibold">Filters</p>
+              {hasActiveFilters && (
+                <button
+                  onClick={() => setFilters(emptyFilters)}
+                  className="text-xs text-slate-400 hover:text-white transition-colors"
+                >
+                  Clear all
+                </button>
+              )}
+            </div>
+
+            {/* Vendor */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Vendor Name</label>
+              <input
+                className={inputCls}
+                placeholder="Search vendor..."
+                value={filters.vendor}
+                onChange={(e) => setFilter('vendor', e.target.value)}
+              />
+            </div>
+
+            {/* POC */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Point of Contact</label>
+              <input
+                className={inputCls}
+                placeholder="Search contact name..."
+                value={filters.pocName}
+                onChange={(e) => setFilter('pocName', e.target.value)}
+              />
+            </div>
+
+            {/* Status */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Status</label>
+              <div className="grid grid-cols-2 gap-y-2 gap-x-3">
+                {[
+                  { value: 'active', label: 'Active' },
+                  { value: 'expiring_soon', label: 'Expiring Soon' },
+                  { value: 'expired', label: 'Expired' },
+                  { value: 'pending', label: 'Pending' },
+                ].map((s) => (
+                  <label key={s.value} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={filters.status.includes(s.value)}
+                      onChange={() => toggleStatus(s.value)}
+                      className="rounded accent-[var(--brand-primary)] cursor-pointer"
+                    />
+                    <span className="text-slate-300 text-xs">{s.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            {/* Cost filter */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Cost</label>
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    className={inputCls + ' cursor-pointer'}
+                    value={filters.costField}
+                    onChange={(e) => setFilter('costField', e.target.value)}
+                  >
+                    <option value="annual_cost">Annual</option>
+                    <option value="monthly_cost">Monthly</option>
+                    <option value="total_cost">Total Value</option>
+                  </select>
+                  <select
+                    className={inputCls + ' cursor-pointer'}
+                    value={filters.costOp}
+                    onChange={(e) => setFilter('costOp', e.target.value)}
+                  >
+                    <option value="any">Any amount</option>
+                    <option value="over">Over</option>
+                    <option value="under">Under</option>
+                    <option value="between">Between</option>
+                  </select>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  <p className="text-white font-bold text-lg">{fmt(c.annual_cost)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
-                  <p className="text-slate-400 text-sm">{fmt(c.monthly_cost)}/mo</p>
+                {filters.costOp !== 'any' && (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      className={inputCls}
+                      placeholder={filters.costOp === 'between' ? 'Min ($)' : 'Amount ($)'}
+                      value={filters.costA}
+                      onChange={(e) => setFilter('costA', e.target.value)}
+                    />
+                    {filters.costOp === 'between' && (
+                      <>
+                        <span className="text-slate-500 text-xs flex-shrink-0">to</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className={inputCls}
+                          placeholder="Max ($)"
+                          value={filters.costB}
+                          onChange={(e) => setFilter('costB', e.target.value)}
+                        />
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Start date range */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Start Date</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">From</p>
+                  <input type="date" className={inputCls} value={filters.startFrom} onChange={(e) => setFilter('startFrom', e.target.value)} />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">To</p>
+                  <input type="date" className={inputCls} value={filters.startTo} onChange={(e) => setFilter('startTo', e.target.value)} />
                 </div>
               </div>
-            </Card>
-          ))
-        )}
-      </div>
+            </div>
+
+            {/* End date range */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">End Date</label>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">From</p>
+                  <input type="date" className={inputCls} value={filters.endFrom} onChange={(e) => setFilter('endFrom', e.target.value)} />
+                </div>
+                <div>
+                  <p className="text-slate-500 text-xs mb-1">To</p>
+                  <input type="date" className={inputCls} value={filters.endTo} onChange={(e) => setFilter('endTo', e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {/* Department */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Department</label>
+              <select
+                className={inputCls + ' cursor-pointer'}
+                value={filters.department_id}
+                onChange={(e) => setFilter('department_id', e.target.value)}
+              >
+                <option value="">All Departments</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.id}>{d.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Branch */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Branch</label>
+              <select
+                className={inputCls + ' cursor-pointer'}
+                value={filters.branch_id}
+                onChange={(e) => setFilter('branch_id', e.target.value)}
+              >
+                <option value="">All Branches</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>Branch {b.number} – {b.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Renews within */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">Renews Within</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min="1"
+                  step="1"
+                  className={inputCls}
+                  placeholder="e.g. 30"
+                  value={filters.renewalWithin}
+                  onChange={(e) => setFilter('renewalWithin', e.target.value)}
+                />
+                <span className="text-slate-400 text-sm flex-shrink-0">days</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Results */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-slate-400 text-sm">
+                <span className="text-white font-medium">{filteredContracts.length}</span> result{filteredContracts.length !== 1 ? 's' : ''}
+                {hasActiveFilters && <span className="text-slate-500"> (filtered from {contracts.length})</span>}
+              </p>
+            </div>
+            {filteredContracts.length === 0 ? (
+              <Card className="text-center py-12">
+                <p className="text-slate-400">No contracts match your filters.</p>
+                <button
+                  onClick={() => setFilters(emptyFilters)}
+                  className="text-sm mt-2 text-slate-500 hover:text-white transition-colors"
+                >
+                  Clear filters
+                </button>
+              </Card>
+            ) : (
+              <ContractList contracts={filteredContracts} onNavigate={(id) => navigate(`/contracts/${id}`)} />
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Import Contracts Modal */}
       <ImportContractsModal
@@ -244,7 +554,7 @@ export default function ContractsPage() {
             />
           )}
 
-          {/* Cost allocation prompt — shown for all department contracts */}
+          {/* Cost allocation prompt */}
           {(() => {
             const selectedDept = departments.find((d) => d.id === parseInt(form.department_id))
             if (form.scope !== 'department' || !selectedDept) return null
