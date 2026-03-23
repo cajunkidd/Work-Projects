@@ -149,6 +149,7 @@ function runMigrations(): void {
   runV2Migration()
   runV3Migration()
   runV4Migration()
+  runV5Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -332,6 +333,40 @@ function runV3Migration(): void {
   `)
 
   db.pragma('user_version = 3')
+}
+
+function runV5Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 5) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS contract_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('built', 'uploaded')),
+      content TEXT,
+      file_path TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS signing_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      template_id INTEGER REFERENCES contract_templates(id) ON DELETE SET NULL,
+      contract_id INTEGER REFERENCES contracts(id) ON DELETE SET NULL,
+      document_title TEXT NOT NULL,
+      recipient_name TEXT NOT NULL,
+      recipient_email TEXT NOT NULL,
+      documenso_document_id TEXT,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','sent','viewed','completed','declined')),
+      document_path TEXT,
+      sent_at TEXT,
+      completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+
+  db.pragma('user_version = 5')
 }
 
 export function updateContractStatuses(): void {

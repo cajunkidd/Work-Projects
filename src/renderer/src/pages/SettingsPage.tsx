@@ -70,6 +70,14 @@ export default function SettingsPage() {
   const [dbPath, setDbPath] = useState('')
   const [logoMsg, setLogoMsg] = useState('')
 
+  // E-Signature (Documenso)
+  const [documensoUrl, setDocumensoUrl] = useState('')
+  const [documensoApiKey, setDocumensoApiKey] = useState('')
+  const [documensoSaving, setDocumensoSaving] = useState(false)
+  const [documensoMsg, setDocumensoMsg] = useState('')
+  const [documensoTesting, setDocumensoTesting] = useState(false)
+  const [showApiKey, setShowApiKey] = useState(false)
+
   const load = () => {
     window.api.settings.get().then((res) => {
       if (res.success && res.data) {
@@ -86,6 +94,8 @@ export default function SettingsPage() {
           smtp_pass: res.data.smtp_pass || '',
           smtp_from: res.data.smtp_from || ''
         })
+        setDocumensoUrl(res.data.documenso_url || '')
+        setDocumensoApiKey(res.data.documenso_api_key || '')
       }
     })
     window.api.departments.list().then((res) => {
@@ -525,6 +535,116 @@ export default function SettingsPage() {
                 {smtpMsg && (
                   <span className={`text-sm ${smtpMsg.startsWith('✓') ? 'text-emerald-400' : smtpMsg.startsWith('Settings') ? 'text-emerald-400' : 'text-red-400'}`}>
                     {smtpMsg}
+                  </span>
+                )}
+              </div>
+            </div>
+          </Card>
+        </section>
+      </RoleGuard>
+
+      {/* ─── E-Signature (Documenso) ─── */}
+      <RoleGuard minRole="super_admin">
+        <section className="space-y-4">
+          <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">E-Signature (Documenso)</h2>
+          <Card>
+            <div className="space-y-4">
+              <p className="text-slate-400 text-sm">
+                Connect to a{' '}
+                <span className="text-slate-300 font-medium">Documenso</span> instance to send
+                contracts for legally-binding electronic signature. Use{' '}
+                <span className="text-slate-300">app.documenso.com</span> or your own self-hosted
+                instance.
+              </p>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-slate-400 text-xs font-medium mb-1.5">
+                    Documenso API URL
+                  </label>
+                  <input
+                    className="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)] w-full placeholder-slate-500"
+                    placeholder="https://app.documenso.com"
+                    value={documensoUrl}
+                    onChange={(e) => setDocumensoUrl(e.target.value)}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 text-xs font-medium mb-1.5">
+                    API Key
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showApiKey ? 'text' : 'password'}
+                      className="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 pr-16 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)] w-full placeholder-slate-500"
+                      placeholder="api_xxxxxxxxxxxxxxxx"
+                      value={documensoApiKey}
+                      onChange={(e) => setDocumensoApiKey(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowApiKey((v) => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-white transition-colors"
+                    >
+                      {showApiKey ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                  <p className="text-slate-500 text-xs mt-1">
+                    Generate an API key in Documenso → Settings → API Tokens
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
+                <Button
+                  onClick={async () => {
+                    setDocumensoSaving(true)
+                    setDocumensoMsg('')
+                    await window.api.settings.set({
+                      documenso_url: documensoUrl,
+                      documenso_api_key: documensoApiKey
+                    })
+                    setDocumensoSaving(false)
+                    setDocumensoMsg('✓ Settings saved')
+                    setTimeout(() => setDocumensoMsg(''), 3000)
+                  }}
+                  disabled={documensoSaving}
+                >
+                  {documensoSaving ? 'Saving...' : 'Save'}
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  onClick={async () => {
+                    setDocumensoTesting(true)
+                    setDocumensoMsg('')
+                    // Save first so the IPC handler reads the latest values
+                    await window.api.settings.set({
+                      documenso_url: documensoUrl,
+                      documenso_api_key: documensoApiKey
+                    })
+                    const res = await window.api.contractCreation.testDocumenso()
+                    setDocumensoTesting(false)
+                    if (res.success) {
+                      setDocumensoMsg('✓ Connected to Documenso successfully!')
+                    } else {
+                      setDocumensoMsg(`Error: ${res.error}`)
+                    }
+                    setTimeout(() => setDocumensoMsg(''), 6000)
+                  }}
+                  disabled={documensoTesting}
+                >
+                  {documensoTesting ? 'Testing...' : 'Test Connection'}
+                </Button>
+
+                {documensoMsg && (
+                  <span
+                    className={`text-sm ${
+                      documensoMsg.startsWith('✓') ? 'text-emerald-400' : 'text-red-400'
+                    }`}
+                  >
+                    {documensoMsg}
                   </span>
                 )}
               </div>

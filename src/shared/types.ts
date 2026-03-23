@@ -203,6 +203,37 @@ export interface AppSettings {
   smtp_user?: string
   smtp_pass?: string
   smtp_from?: string
+  // E-Signature (Documenso)
+  documenso_url?: string
+  documenso_api_key?: string
+}
+
+// ─── Contract Builder / E-Signature ─────────────────────────────────────────
+
+export interface ContractTemplate {
+  id: number
+  title: string
+  type: 'built' | 'uploaded'
+  content?: string      // TipTap JSON (for 'built')
+  file_path?: string    // absolute path to PDF (for 'uploaded')
+  created_at: string
+}
+
+export type SigningRequestStatus = 'pending' | 'sent' | 'viewed' | 'completed' | 'declined'
+
+export interface SigningRequest {
+  id: number
+  template_id?: number
+  contract_id?: number
+  document_title: string
+  recipient_name: string
+  recipient_email: string
+  documenso_document_id?: string
+  status: SigningRequestStatus
+  document_path?: string
+  sent_at?: string
+  completed_at?: string
+  created_at: string
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

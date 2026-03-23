@@ -126,5 +126,18 @@ contextBridge.exposeInMainWorld('api', {
     invoices: (data: any[]) => ipcRenderer.invoke('exports:invoices', data),
     contractsList: (data: any[]) => ipcRenderer.invoke('exports:contractsList', data),
     contractDetail: (payload: any) => ipcRenderer.invoke('exports:contractDetail', payload)
+  },
+
+  // Contract Creation & E-Signature
+  contractCreation: {
+    saveTemplate: (payload: any) => ipcRenderer.invoke('contractCreation:saveTemplate', payload),
+    uploadTemplate: (payload?: any) => ipcRenderer.invoke('contractCreation:uploadTemplate', payload),
+    listTemplates: () => ipcRenderer.invoke('contractCreation:listTemplates'),
+    deleteTemplate: (id: number) => ipcRenderer.invoke('contractCreation:deleteTemplate', id),
+    generatePdf: (html: string, title: string) => ipcRenderer.invoke('contractCreation:generatePdf', html, title),
+    send: (payload: any) => ipcRenderer.invoke('contractCreation:send', payload),
+    listRequests: () => ipcRenderer.invoke('contractCreation:listRequests'),
+    refreshStatus: (requestId: number) => ipcRenderer.invoke('contractCreation:refreshStatus', requestId),
+    testDocumenso: () => ipcRenderer.invoke('contractCreation:testDocumenso')
   }
 })

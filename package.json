@@ -13,6 +13,10 @@
     "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.20.4",
+    "@tiptap/extension-underline": "^3.20.4",
+    "@tiptap/react": "^3.20.4",
+    "@tiptap/starter-kit": "^3.20.4",
     "bcryptjs": "^2.4.3",
     "better-sqlite3": "^9.4.3",
     "colorthief": "^2.4.0",

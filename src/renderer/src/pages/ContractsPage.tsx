@@ -12,6 +12,7 @@ import RoleGuard from '../components/layout/RoleGuard'
 import type { Contract, Department, Branch } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 import ImportContractsModal from '../components/contracts/ImportContractsModal'
+import ContractCreationTab from '../components/contracts/ContractCreationTab'
 
 function statusVariant(s: string) {
   return s === 'active' ? 'success' : s === 'expiring_soon' ? 'warning' : s === 'expired' ? 'danger' : 'neutral'
@@ -102,7 +103,7 @@ export default function ContractsPage() {
   const [departments, setDepartments] = useState<Department[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
   const [search, setSearch] = useState('')
-  const [activeTab, setActiveTab] = useState<'list' | 'search'>('list')
+  const [activeTab, setActiveTab] = useState<'list' | 'search' | 'create'>('list')
   const [filters, setFilters] = useState(emptyFilters)
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
@@ -275,17 +276,17 @@ export default function ContractsPage() {
 
       {/* Tab bar */}
       <div className="flex gap-1 border-b border-slate-700">
-        {(['list', 'search'] as const).map((tab) => (
+        {(['list', 'search', 'create'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px capitalize ${
+            className={`px-4 py-2 text-sm font-medium transition-colors border-b-2 -mb-px ${
               activeTab === tab
                 ? 'text-white border-[var(--brand-primary)]'
                 : 'text-slate-400 border-transparent hover:text-slate-200'
             }`}
           >
-            {tab === 'list' ? 'Contracts' : 'Search'}
+            {tab === 'list' ? 'Contracts' : tab === 'search' ? 'Search' : 'Contract Creation'}
           </button>
         ))}
       </div>
@@ -526,6 +527,11 @@ export default function ContractsPage() {
           </div>
         </div>
       )}
+
+      {/* ------------------------------------------------------------------ */}
+      {/* Tab: Contract Creation                                             */}
+      {/* ------------------------------------------------------------------ */}
+      {activeTab === 'create' && <ContractCreationTab />}
 
       {/* Import Contracts Modal */}
       <ImportContractsModal
