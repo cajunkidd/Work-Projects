@@ -1,4 +1,8 @@
 import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
+
+// Fix: Disable GPU disk cache to prevent "Access is denied" errors on Windows
+app.commandLine.appendSwitch('disable-gpu-shader-disk-cache')
+app.commandLine.appendSwitch('disable-gpu-cache')
 import path from 'path'
 import { pathToFileURL } from 'url'
 import { initDatabase, updateContractStatuses } from './database'
