@@ -143,12 +143,12 @@ export default function ContractsPage() {
           <h1 className="text-white text-2xl font-bold">Contracts</h1>
           <p className="text-slate-400 text-sm">{contracts.length} contracts</p>
         </div>
-        <RoleGuard minRole="super_admin">
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" onClick={() => setShowImportModal(true)}>↑ Import Contracts</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" onClick={() => setShowImportModal(true)}>↑ Import Contracts</Button>
+          <RoleGuard minRole="super_admin">
             <Button onClick={() => setShowModal(true)}>+ New Contract</Button>
-          </div>
-        </RoleGuard>
+          </RoleGuard>
+        </div>
       </div>
 
       {/* Search */}
