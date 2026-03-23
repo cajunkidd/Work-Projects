@@ -181,6 +181,14 @@ export interface AppSettings {
   db_network_path?: string
   gmail_connected?: string
   gmail_email?: string
+  // Email / SMTP notifications
+  smtp_enabled?: string   // 'true' | 'false'
+  smtp_host?: string
+  smtp_port?: string
+  smtp_secure?: string    // 'true' = SSL/TLS
+  smtp_user?: string
+  smtp_pass?: string
+  smtp_from?: string
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

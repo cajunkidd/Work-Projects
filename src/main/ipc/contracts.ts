@@ -2,6 +2,11 @@ import { ipcMain, dialog } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb } from '../database'
+import {
+  notifyContractCreated,
+  notifyContractUpdated,
+  notifyContractDeleted
+} from '../emailNotifier'
 import type {
   IpcResponse,
   Contract,
@@ -156,6 +161,7 @@ export function registerContractHandlers(): void {
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(result.lastInsertRowid) as Contract
+        notifyContractCreated(db, row).catch(() => {})
         return { success: true, data: row }
       } catch (err: any) {
         return { success: false, error: err.message }
@@ -169,10 +175,17 @@ export function registerContractHandlers(): void {
     async (_e, payload: Partial<Contract> & { id: number }): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        // Fetch current contract for notification context before updating
+        const current = db
+          .prepare('SELECT * FROM contracts WHERE id = ?')
+          .get(payload.id) as Contract | undefined
         const fields = Object.keys(payload).filter((k) => k !== 'id')
         const sets = fields.map((f) => `${f} = ?`).join(', ')
         const values = fields.map((f) => (payload as any)[f])
         db.prepare(`UPDATE contracts SET ${sets} WHERE id = ?`).run(...values, payload.id)
+        if (current) {
+          notifyContractUpdated(db, current, fields).catch(() => {})
+        }
         return { success: true }
       } catch (err: any) {
         return { success: false, error: err.message }
@@ -183,7 +196,14 @@ export function registerContractHandlers(): void {
   // Delete contract
   ipcMain.handle('contracts:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
     try {
-      getDb().prepare('DELETE FROM contracts WHERE id = ?').run(id)
+      const db = getDb()
+      const contract = db
+        .prepare('SELECT vendor_name, department_id, branch_id FROM contracts WHERE id = ?')
+        .get(id) as { vendor_name: string; department_id: number | null; branch_id: number | null } | undefined
+      db.prepare('DELETE FROM contracts WHERE id = ?').run(id)
+      if (contract) {
+        notifyContractDeleted(db, contract.vendor_name, contract.department_id, contract.branch_id).catch(() => {})
+      }
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }

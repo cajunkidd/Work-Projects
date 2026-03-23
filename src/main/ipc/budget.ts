@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
+import { notifyBudgetUpdated } from '../emailNotifier'
 import type { IpcResponse, Budget, BudgetSummary, Department, Branch, ContractAllocation } from '../../shared/types'
 
 export function registerBudgetHandlers(): void {
@@ -131,6 +132,7 @@ export function registerBudgetHandlers(): void {
              ON CONFLICT(department_id, branch_id, fiscal_year) DO UPDATE SET total_amount = excluded.total_amount`
           )
           .run(payload.department_id, payload.branch_id, payload.fiscal_year, payload.total_amount)
+        notifyBudgetUpdated(getDb(), payload).catch(() => {})
         return { success: true }
       } catch (err: any) {
         return { success: false, error: err.message }

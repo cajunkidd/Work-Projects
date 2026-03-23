@@ -1,6 +1,7 @@
 import { ipcMain, dialog } from 'electron'
 import path from 'path'
 import { getDb, switchDatabase } from '../database'
+import { sendTestEmail } from '../emailNotifier'
 import type { IpcResponse, AppSettings } from '../../shared/types'
 
 export function registerSettingsHandlers(): void {
@@ -184,6 +185,16 @@ export function registerSettingsHandlers(): void {
       }
     } catch (err: any) {
       return { success: true, data: defaults }
+    }
+  })
+
+  // Test email (SMTP verification)
+  ipcMain.handle('settings:testEmail', async (_e, toEmail: string): Promise<IpcResponse<void>> => {
+    try {
+      await sendTestEmail(getDb(), toEmail)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
     }
   })
 

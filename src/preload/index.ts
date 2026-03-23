@@ -88,7 +88,8 @@ contextBridge.exposeInMainWorld('api', {
     set: (payload: any) => ipcRenderer.invoke('settings:set', payload),
     uploadLogo: () => ipcRenderer.invoke('settings:uploadLogo'),
     pickDbFolder: () => ipcRenderer.invoke('settings:pickDbFolder'),
-    extractColors: (imagePath: string) => ipcRenderer.invoke('settings:extractColors', imagePath)
+    extractColors: (imagePath: string) => ipcRenderer.invoke('settings:extractColors', imagePath),
+    testEmail: (toEmail: string) => ipcRenderer.invoke('settings:testEmail', toEmail)
   },
 
   // Gmail

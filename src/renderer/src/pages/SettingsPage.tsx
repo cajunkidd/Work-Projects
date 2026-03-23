@@ -25,6 +25,20 @@ export default function SettingsPage() {
   const [newBranchName, setNewBranchName] = useState('')
   const [branchSaving, setBranchSaving] = useState(false)
 
+  // Email notifications (SMTP)
+  const [smtpForm, setSmtpForm] = useState({
+    smtp_enabled: 'false',
+    smtp_host: '',
+    smtp_port: '587',
+    smtp_secure: 'false',
+    smtp_user: '',
+    smtp_pass: '',
+    smtp_from: ''
+  })
+  const [smtpSaving, setSmtpSaving] = useState(false)
+  const [smtpMsg, setSmtpMsg] = useState('')
+  const [testingEmail, setTestingEmail] = useState(false)
+
   // Gmail
   const [gmailConnected, setGmailConnected] = useState(false)
   const [gmailEmail, setGmailEmail] = useState('')
@@ -63,6 +77,15 @@ export default function SettingsPage() {
         setGmailConnected(res.data.gmail_connected === 'true')
         setGmailEmail(res.data.gmail_email || '')
         setDbPath(res.data.db_network_path || '')
+        setSmtpForm({
+          smtp_enabled: res.data.smtp_enabled || 'false',
+          smtp_host: res.data.smtp_host || '',
+          smtp_port: res.data.smtp_port || '587',
+          smtp_secure: res.data.smtp_secure || 'false',
+          smtp_user: res.data.smtp_user || '',
+          smtp_pass: res.data.smtp_pass || '',
+          smtp_from: res.data.smtp_from || ''
+        })
       }
     })
     window.api.departments.list().then((res) => {
@@ -394,6 +417,118 @@ export default function SettingsPage() {
                 {gmailMsg && <p className="text-sm text-slate-300">{gmailMsg}</p>}
               </div>
             )}
+          </Card>
+        </section>
+      </RoleGuard>
+
+      {/* ─── Email Notifications ─── */}
+      <RoleGuard minRole="super_admin">
+        <section className="space-y-4">
+          <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Email Notifications</h2>
+          <Card>
+            <div className="space-y-4">
+              <p className="text-slate-400 text-sm">
+                Send automatic email alerts to users when contracts or budgets relevant to their department or branch are added, changed, or removed.
+              </p>
+
+              {/* Master toggle */}
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={smtpForm.smtp_enabled === 'true'}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_enabled: e.target.checked ? 'true' : 'false' }))}
+                  className="w-4 h-4 rounded accent-[var(--brand-primary)] cursor-pointer"
+                />
+                <span className="text-white text-sm font-medium">Enable email notifications</span>
+              </label>
+
+              {/* SMTP fields */}
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="SMTP Host"
+                  placeholder="smtp.gmail.com"
+                  value={smtpForm.smtp_host}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_host: e.target.value }))}
+                />
+                <Input
+                  label="SMTP Port"
+                  type="number"
+                  placeholder="587"
+                  value={smtpForm.smtp_port}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_port: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Username / Email"
+                  placeholder="you@company.com"
+                  value={smtpForm.smtp_user}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_user: e.target.value }))}
+                />
+                <Input
+                  label="Password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={smtpForm.smtp_pass}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_pass: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="From Address"
+                  placeholder="noreply@company.com"
+                  value={smtpForm.smtp_from}
+                  onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_from: e.target.value }))}
+                />
+                <div className="flex items-end pb-0.5">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={smtpForm.smtp_secure === 'true'}
+                      onChange={(e) => setSmtpForm((f) => ({ ...f, smtp_secure: e.target.checked ? 'true' : 'false' }))}
+                      className="w-4 h-4 rounded accent-[var(--brand-primary)] cursor-pointer"
+                    />
+                    <span className="text-slate-300 text-sm">Use SSL/TLS (port 465)</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-3 pt-1">
+                <Button
+                  variant="primary"
+                  disabled={smtpSaving}
+                  onClick={async () => {
+                    setSmtpSaving(true)
+                    await window.api.settings.set(smtpForm)
+                    setSmtpSaving(false)
+                    setSmtpMsg('Settings saved!')
+                    setTimeout(() => setSmtpMsg(''), 3000)
+                  }}
+                >
+                  {smtpSaving ? 'Saving...' : 'Save Settings'}
+                </Button>
+                <Button
+                  variant="secondary"
+                  disabled={testingEmail || !smtpForm.smtp_host}
+                  onClick={async () => {
+                    setTestingEmail(true)
+                    setSmtpMsg('')
+                    const res = await window.api.settings.testEmail(currentUser?.email || '')
+                    setTestingEmail(false)
+                    setSmtpMsg(res.success ? '✓ Test email sent!' : `Failed: ${res.error}`)
+                    setTimeout(() => setSmtpMsg(''), 6000)
+                  }}
+                >
+                  {testingEmail ? 'Sending...' : 'Send Test Email'}
+                </Button>
+                {smtpMsg && (
+                  <span className={`text-sm ${smtpMsg.startsWith('✓') ? 'text-emerald-400' : smtpMsg.startsWith('Settings') ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {smtpMsg}
+                  </span>
+                )}
+              </div>
+            </div>
           </Card>
         </section>
       </RoleGuard>
