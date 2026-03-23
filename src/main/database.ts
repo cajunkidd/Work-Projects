@@ -147,6 +147,7 @@ function runMigrations(): void {
   // Run incremental migrations
   runV1Migration()
   runV2Migration()
+  runV3Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -284,6 +285,25 @@ function runV2Migration(): void {
   `)
 
   db.pragma('user_version = 2')
+}
+
+function runV3Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 3) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS branch_assets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      branch_id INTEGER NOT NULL REFERENCES branches(id) ON DELETE CASCADE,
+      asset_type TEXT NOT NULL CHECK(asset_type IN ('computer', 'thin_client', 'server')),
+      count INTEGER NOT NULL DEFAULT 0,
+      notes TEXT,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(branch_id, asset_type)
+    );
+  `)
+
+  db.pragma('user_version = 3')
 }
 
 export function updateContractStatuses(): void {

@@ -72,6 +72,20 @@ export interface ContractAllocation {
   created_at: string
 }
 
+// ─── Branch Assets ───────────────────────────────────────────────────────────
+
+export type AssetType = 'computer' | 'thin_client' | 'server'
+
+export interface BranchAsset {
+  id?: number
+  branch_id: number
+  branch_name?: string
+  branch_number?: number
+  asset_type: AssetType
+  count: number
+  updated_at?: string
+}
+
 // ─── Contracts ──────────────────────────────────────────────────────────────
 
 export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'pending'

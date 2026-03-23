@@ -50,6 +50,7 @@ export default function ContractDetailPage() {
   const [editingAllocations, setEditingAllocations] = useState(false)
   const [draftAllocations, setDraftAllocations] = useState<AllocationRow[]>([])
   const [savingAllocations, setSavingAllocations] = useState(false)
+  const [assetSummary, setAssetSummary] = useState<{ totalMachines: number; branchCount: number } | null>(null)
   const [allBranches, setAllBranches] = useState<import('../../../shared/types').Branch[]>([])
   const [allDepartments, setAllDepartments] = useState<import('../../../shared/types').Department[]>([])
 
@@ -184,6 +185,35 @@ export default function ContractDetailPage() {
     if (res.success && res.data) setAllocations(res.data)
     setSavingAllocations(false)
     setEditingAllocations(false)
+  }
+
+  const handleCalculateFromAssets = async () => {
+    const res = await window.api.assets.list()
+    if (!res.success || !res.data) return
+
+    // Aggregate total devices per branch
+    const branchTotals = new Map<string, { name: string; total: number }>()
+    for (const a of res.data) {
+      const key = String(a.branch_id)
+      const entry = branchTotals.get(key) ?? { name: `#${a.branch_number ?? ''} – ${a.branch_name ?? ''}`, total: 0 }
+      entry.total += a.count
+      branchTotals.set(key, entry)
+    }
+
+    // Filter branches with at least 1 device
+    const active = [...branchTotals.entries()].filter(([, v]) => v.total > 0)
+    const grandTotal = active.reduce((s, [, v]) => s + v.total, 0)
+    if (grandTotal === 0) return
+
+    const rows: AllocationRow[] = active.map(([branchId, v]) => ({
+      target: 'branch',
+      targetId: branchId,
+      allocationType: 'percentage',
+      value: ((v.total / grandTotal) * 100).toFixed(2)
+    }))
+
+    setDraftAllocations(rows)
+    setAssetSummary({ totalMachines: grandTotal, branchCount: active.length })
   }
 
   if (!contract) {
@@ -533,13 +563,32 @@ export default function ContractDetailPage() {
           </div>
 
           {editingAllocations ? (
-            <AllocationEditor
-              allocations={draftAllocations}
-              onChange={setDraftAllocations}
-              branches={allBranches}
-              departments={allDepartments}
-              annualCost={contract.annual_cost}
-            />
+            <>
+              <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-slate-800/60 border border-slate-700">
+                <button
+                  onClick={handleCalculateFromAssets}
+                  className="text-sm px-3 py-1.5 rounded-lg bg-blue-900/50 text-blue-300 border border-blue-700/50 hover:bg-blue-800/50 transition-colors font-medium"
+                >
+                  Calculate from Assets
+                </button>
+                {assetSummary ? (
+                  <span className="text-slate-400 text-xs">
+                    Based on {assetSummary.totalMachines.toLocaleString()} total machines across {assetSummary.branchCount} branches
+                  </span>
+                ) : (
+                  <span className="text-slate-500 text-xs">
+                    Auto-fill branch percentages based on device counts from the Assets page
+                  </span>
+                )}
+              </div>
+              <AllocationEditor
+                allocations={draftAllocations}
+                onChange={setDraftAllocations}
+                branches={allBranches}
+                departments={allDepartments}
+                annualCost={contract.annual_cost}
+              />
+            </>
           ) : allocations.length === 0 ? (
             <p className="text-slate-400 text-sm">
               No allocations set — full cost is charged to IT department.

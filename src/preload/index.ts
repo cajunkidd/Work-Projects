@@ -107,6 +107,13 @@ contextBridge.exposeInMainWorld('api', {
     upcomingRenewals: () => ipcRenderer.invoke('scheduler:upcomingRenewals')
   },
 
+  // IT Assets
+  assets: {
+    list: () => ipcRenderer.invoke('assets:list'),
+    save: (rows: any[]) => ipcRenderer.invoke('assets:save', rows),
+    importFile: () => ipcRenderer.invoke('assets:importFile')
+  },
+
   // IT Contract Allocations
   allocations: {
     list: (contract_id: number) => ipcRenderer.invoke('allocations:list', contract_id),

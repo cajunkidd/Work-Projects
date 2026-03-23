@@ -12,6 +12,7 @@ import { registerNoteHandlers } from './ipc/notes'
 import { registerSettingsHandlers } from './ipc/settings'
 import { registerGmailHandlers } from './ipc/gmail'
 import { registerImportHandlers } from './ipc/importContracts'
+import { registerAssetHandlers } from './ipc/assets'
 import { startScheduler, getUpcomingRenewals } from './scheduler'
 
 let mainWindow: BrowserWindow | null = null
@@ -72,6 +73,7 @@ app.whenReady().then(() => {
   registerSettingsHandlers()
   registerGmailHandlers()
   registerImportHandlers()
+  registerAssetHandlers()
 
   // IPC for getting upcoming renewals (used by renderer)
   ipcMain.handle('scheduler:upcomingRenewals', () => {

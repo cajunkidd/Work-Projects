@@ -12,6 +12,7 @@ import CompetitorsPage from './pages/CompetitorsPage'
 import ProjectsPage from './pages/ProjectsPage'
 import SettingsPage from './pages/SettingsPage'
 import OrgDetailPage from './pages/OrgDetailPage'
+import AssetsPage from './pages/AssetsPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
@@ -48,6 +49,7 @@ export default function App() {
           <Route path="competitors" element={<CompetitorsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="assets" element={<AssetsPage />} />
           <Route path="department/:id" element={<OrgDetailPage type="department" />} />
           <Route path="branch/:id" element={<OrgDetailPage type="branch" />} />
         </Route>
