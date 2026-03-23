@@ -201,7 +201,7 @@ export function registerSettingsHandlers(): void {
   // Dashboard spend trend data
   ipcMain.handle(
     'dashboard:spendTrend',
-    async (_e, opts: { fiscal_year: number; department_id?: number }): Promise<IpcResponse<{ month: string; amount: number }[]>> => {
+    async (_e, opts: { fiscal_year: number; department_id?: number; branch_id?: number }): Promise<IpcResponse<{ month: string; amount: number }[]>> => {
       try {
         const db = getDb()
         let query = `
@@ -216,6 +216,10 @@ export function registerSettingsHandlers(): void {
         if (opts.department_id) {
           query += ' AND department_id = ?'
           params.push(opts.department_id)
+        }
+        if (opts.branch_id) {
+          query += ' AND branch_id = ?'
+          params.push(opts.branch_id)
         }
         query += " GROUP BY month ORDER BY month"
         const rows = db.prepare(query).all(...params) as { month: string; amount: number }[]

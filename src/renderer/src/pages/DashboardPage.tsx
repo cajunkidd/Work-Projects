@@ -38,7 +38,7 @@ function fmt(n: number) {
 
 type BreakdownItem = BudgetSummary & { type: 'branch' | 'department' }
 
-function BudgetBreakdownPanel({ items }: { items: BreakdownItem[] }) {
+function BudgetBreakdownPanel({ items, onNavigate }: { items: BreakdownItem[]; onNavigate: (item: BreakdownItem) => void }) {
   const [isOpen, setIsOpen] = useState(true)
   const sort = (arr: BreakdownItem[]) =>
     [...arr].sort((a, b) => {
@@ -65,7 +65,8 @@ function BudgetBreakdownPanel({ items }: { items: BreakdownItem[] }) {
     return (
       <div
         key={`${item.type}-${item.branch_id ?? item.department_id}`}
-        className="grid grid-cols-12 items-center gap-3 py-2.5 border-b border-slate-800 last:border-0"
+        className="grid grid-cols-12 items-center gap-3 py-2.5 border-b border-slate-800 last:border-0 cursor-pointer hover:bg-slate-800/40 rounded transition-colors px-1 -mx-1"
+        onClick={() => onNavigate(item)}
       >
         {/* Name + type badge */}
         <div className="col-span-3 flex items-center gap-2 min-w-0">
@@ -511,6 +512,13 @@ export default function DashboardPage() {
             ...branchBudgets.map((s) => ({ ...s, type: 'branch' as const })),
             ...deptBudgets.map((s) => ({ ...s, type: 'department' as const }))
           ]}
+          onNavigate={(item) =>
+            navigate(
+              item.type === 'branch'
+                ? `/branch/${item.branch_id}`
+                : `/department/${item.department_id}`
+            )
+          }
         />
       )}
 
