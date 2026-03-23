@@ -3,6 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  LineChart,
+  Line,
   PieChart,
   Pie,
   Cell,
@@ -35,6 +39,7 @@ function fmt(n: number) {
 type BreakdownItem = BudgetSummary & { type: 'branch' | 'department' }
 
 function BudgetBreakdownPanel({ items }: { items: BreakdownItem[] }) {
+  const [isOpen, setIsOpen] = useState(true)
   const sort = (arr: BreakdownItem[]) =>
     [...arr].sort((a, b) => {
       const pA = a.total_budget > 0 ? a.total_spent / a.total_budget : 0
@@ -126,35 +131,50 @@ function BudgetBreakdownPanel({ items }: { items: BreakdownItem[] }) {
 
   return (
     <Card>
-      <p className="text-white font-semibold mb-4">Budget Breakdown</p>
-      {items.length === 0 ? (
-        <p className="text-slate-400 text-sm">No budget data available</p>
-      ) : (
+      <button
+        onClick={() => setIsOpen((v) => !v)}
+        className="flex w-full items-center justify-between mb-4"
+      >
+        <p className="text-white font-semibold">Budget Breakdown</p>
+        <svg
+          className={`w-4 h-4 text-slate-400 transition-transform ${isOpen ? '' : '-rotate-90'}`}
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {isOpen && (
         <>
-          {/* Column headers */}
-          <div className="grid grid-cols-12 gap-3 pb-2 border-b border-slate-700 mb-1">
-            <span className="col-span-3 text-slate-500 text-xs uppercase tracking-wide">Name</span>
-            <span className="col-span-4 text-slate-500 text-xs uppercase tracking-wide">Utilization</span>
-            <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide text-right">Spent / Budget</span>
-            <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide text-right">Remaining</span>
-            <span className="col-span-1 text-slate-500 text-xs uppercase tracking-wide text-right">Status</span>
-          </div>
-
-          {showHeaders && branches.length > 0 && (
+          {items.length === 0 ? (
+            <p className="text-slate-400 text-sm">No budget data available</p>
+          ) : (
             <>
-              <p className="text-slate-500 text-xs uppercase tracking-wide mt-3 mb-1">Store Branches</p>
-              {branches.map(renderRow)}
+              {/* Column headers */}
+              <div className="grid grid-cols-12 gap-3 pb-2 border-b border-slate-700 mb-1">
+                <span className="col-span-3 text-slate-500 text-xs uppercase tracking-wide">Name</span>
+                <span className="col-span-4 text-slate-500 text-xs uppercase tracking-wide">Utilization</span>
+                <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide text-right">Spent / Budget</span>
+                <span className="col-span-2 text-slate-500 text-xs uppercase tracking-wide text-right">Remaining</span>
+                <span className="col-span-1 text-slate-500 text-xs uppercase tracking-wide text-right">Status</span>
+              </div>
+
+              {showHeaders && branches.length > 0 && (
+                <>
+                  <p className="text-slate-500 text-xs uppercase tracking-wide mt-3 mb-1">Store Branches</p>
+                  {branches.map(renderRow)}
+                </>
+              )}
+              {!showHeaders && branches.map(renderRow)}
+
+              {showHeaders && depts.length > 0 && (
+                <>
+                  <p className="text-slate-500 text-xs uppercase tracking-wide mt-4 mb-1">Departments</p>
+                  {depts.map(renderRow)}
+                </>
+              )}
+              {!showHeaders && depts.map(renderRow)}
             </>
           )}
-          {!showHeaders && branches.map(renderRow)}
-
-          {showHeaders && depts.length > 0 && (
-            <>
-              <p className="text-slate-500 text-xs uppercase tracking-wide mt-4 mb-1">Departments</p>
-              {depts.map(renderRow)}
-            </>
-          )}
-          {!showHeaders && depts.map(renderRow)}
         </>
       )}
     </Card>
@@ -195,6 +215,32 @@ function BudgetGauge({ summary }: { summary: BudgetSummary }) {
   )
 }
 
+function ChartToggle<T extends string>({
+  options,
+  value,
+  onChange
+}: {
+  options: { key: T; label: string }[]
+  value: T
+  onChange: (v: T) => void
+}) {
+  return (
+    <div className="flex gap-1">
+      {options.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={`text-xs px-2 py-0.5 rounded transition-colors ${
+            value === o.key ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { selectedDeptId, brandPrimary } = useThemeStore()
@@ -205,6 +251,8 @@ export default function DashboardPage() {
   const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([])
   const [spendTrend, setSpendTrend] = useState<{ month: string; amount: number }[]>([])
   const [projectCounts, setProjectCounts] = useState({ active: 0, on_hold: 0, completed: 0 })
+  const [trendChart, setTrendChart] = useState<'area' | 'bar' | 'line'>('area')
+  const [statusChart, setStatusChart] = useState<'donut' | 'bar' | 'radial'>('donut')
   const year = new Date().getFullYear()
 
   useEffect(() => {
@@ -350,38 +398,105 @@ export default function DashboardPage() {
       <div className="grid grid-cols-12 gap-4">
         {/* Spend trend */}
         <Card className="col-span-8">
-          <p className="text-white font-semibold mb-4">Monthly Spend Trend</p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-white font-semibold">Monthly Spend Trend</p>
+            <ChartToggle
+              options={[
+                { key: 'area' as const, label: 'Area' },
+                { key: 'bar' as const, label: 'Bar' },
+                { key: 'line' as const, label: 'Line' }
+              ]}
+              value={trendChart}
+              onChange={setTrendChart}
+            />
+          </div>
           <ResponsiveContainer width="100%" height={200}>
-            <AreaChart data={spendTrend}>
-              <defs>
-                <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor={brandPrimary} stopOpacity={0.3} />
-                  <stop offset="95%" stopColor={brandPrimary} stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-              <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-              <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
-              <Tooltip formatter={(v: number) => [fmt(v), 'Spend']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-              <Area type="monotone" dataKey="amount" stroke={brandPrimary} fill="url(#spendGrad)" strokeWidth={2} />
-            </AreaChart>
+            {trendChart === 'area' ? (
+              <AreaChart data={spendTrend}>
+                <defs>
+                  <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={brandPrimary} stopOpacity={0.3} />
+                    <stop offset="95%" stopColor={brandPrimary} stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => [fmt(v), 'Spend']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
+                <Area type="monotone" dataKey="amount" stroke={brandPrimary} fill="url(#spendGrad)" strokeWidth={2} />
+              </AreaChart>
+            ) : trendChart === 'bar' ? (
+              <BarChart data={spendTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => [fmt(v), 'Spend']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
+                <Bar dataKey="amount" fill={brandPrimary} radius={[3, 3, 0, 0]} />
+              </BarChart>
+            ) : (
+              <LineChart data={spendTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
+                <Tooltip formatter={(v: number) => [fmt(v), 'Spend']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
+                <Line type="monotone" dataKey="amount" stroke={brandPrimary} strokeWidth={2} dot={{ fill: brandPrimary, r: 3 }} />
+              </LineChart>
+            )}
           </ResponsiveContainer>
         </Card>
 
-        {/* Contract status pie */}
+        {/* Contract status chart */}
         <Card className="col-span-4">
-          <p className="text-white font-semibold mb-4">Contract Status</p>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-white font-semibold">Contract Status</p>
+            <ChartToggle
+              options={[
+                { key: 'donut' as const, label: 'Donut' },
+                { key: 'bar' as const, label: 'Bar' },
+                { key: 'radial' as const, label: 'Radial' }
+              ]}
+              value={statusChart}
+              onChange={setStatusChart}
+            />
+          </div>
           {statusCounts.length > 0 ? (
             <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" label={({ name, value }) => `${value}`} labelLine={false}>
-                  {statusCounts.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} />
-                  ))}
-                </Pie>
-                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-                <Legend formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
-              </PieChart>
+              {statusChart === 'donut' ? (
+                <PieChart>
+                  <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" label={({ value }) => `${value}`} labelLine={false}>
+                    {statusCounts.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
+                  <Legend formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
+                </PieChart>
+              ) : statusChart === 'bar' ? (
+                <BarChart data={statusCounts} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} width={80} />
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
+                  <Bar dataKey="value" radius={[0, 3, 3, 0]}>
+                    {statusCounts.map((entry, i) => (
+                      <Cell key={i} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              ) : (
+                <RadialBarChart
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={20}
+                  outerRadius={90}
+                  barSize={12}
+                  data={statusCounts.map((s) => ({ ...s, value: s.value, fill: s.fill }))}
+                >
+                  <RadialBar dataKey="value" cornerRadius={4} label={{ position: 'insideStart', fill: '#fff', fontSize: 10 }} />
+                  <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
+                  <Legend formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 12 }}>{v}</span>} />
+                </RadialBarChart>
+              )}
             </ResponsiveContainer>
           ) : (
             <p className="text-slate-400 text-sm text-center mt-12">No contracts</p>
