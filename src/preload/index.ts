@@ -38,7 +38,9 @@ contextBridge.exposeInMainWorld('api', {
     create: (payload: any) => ipcRenderer.invoke('contracts:create', payload),
     update: (payload: any) => ipcRenderer.invoke('contracts:update', payload),
     delete: (id: number) => ipcRenderer.invoke('contracts:delete', id),
-    uploadFile: () => ipcRenderer.invoke('contracts:uploadFile')
+    uploadFile: () => ipcRenderer.invoke('contracts:uploadFile'),
+    parseImport: () => ipcRenderer.invoke('contracts:parseImport'),
+    bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows)
   },
   lineItems: {
     list: (contract_id: number) => ipcRenderer.invoke('lineItems:list', contract_id),

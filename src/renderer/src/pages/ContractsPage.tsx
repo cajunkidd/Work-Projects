@@ -11,6 +11,7 @@ import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
 import type { Contract, Department, Branch } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
+import ImportContractsModal from '../components/contracts/ImportContractsModal'
 
 function statusVariant(s: string) {
   return s === 'active' ? 'success' : s === 'expiring_soon' ? 'warning' : s === 'expired' ? 'danger' : 'neutral'
@@ -39,6 +40,7 @@ export default function ContractsPage() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [search, setSearch] = useState('')
   const [showModal, setShowModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
@@ -142,7 +144,10 @@ export default function ContractsPage() {
           <p className="text-slate-400 text-sm">{contracts.length} contracts</p>
         </div>
         <RoleGuard minRole="super_admin">
-          <Button onClick={() => setShowModal(true)}>+ New Contract</Button>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" onClick={() => setShowImportModal(true)}>↑ Import Contracts</Button>
+            <Button onClick={() => setShowModal(true)}>+ New Contract</Button>
+          </div>
         </RoleGuard>
       </div>
 
@@ -196,6 +201,15 @@ export default function ContractsPage() {
           ))
         )}
       </div>
+
+      {/* Import Contracts Modal */}
+      <ImportContractsModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        onComplete={load}
+        departments={departments}
+        branches={branches}
+      />
 
       {/* New Contract Modal */}
       <Modal open={showModal} onClose={() => { setShowModal(false); setNeedsAllocation(false); setAllocations([]) }} title="New Contract" width="max-w-2xl">
