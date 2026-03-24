@@ -35,9 +35,11 @@ export function initDatabase(customPath?: string): void {
 
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
 
+  // Foreign keys OFF during migrations (table renames break FK refs in SQLite 3.26+)
+  db.pragma('foreign_keys = OFF')
   runMigrations()
+  db.pragma('foreign_keys = ON')
 }
 
 export function switchDatabase(newPath: string): void {
