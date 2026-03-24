@@ -2,7 +2,6 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
-import { seedDemoData } from './seedDemoData'
 
 let db: Database.Database
 
@@ -22,14 +21,23 @@ export function initDatabase(customPath?: string): void {
     fs.mkdirSync(dbDir, { recursive: true })
   }
 
+  // Clean up orphaned WAL/SHM files if main DB doesn't exist
+  // (prevents stale recovery from a deleted database)
+  if (!fs.existsSync(dbPath)) {
+    for (const ext of ['-wal', '-shm']) {
+      const companion = dbPath + ext
+      if (fs.existsSync(companion)) {
+        fs.unlinkSync(companion)
+        console.log('[db] Removed orphaned', companion)
+      }
+    }
+  }
+
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
   db.pragma('foreign_keys = ON')
 
   runMigrations()
-
-  // Seed demo data right after migrations, using the actual open database
-  seedDemoData()
 }
 
 export function switchDatabase(newPath: string): void {

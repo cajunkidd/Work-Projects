@@ -23,10 +23,13 @@ if (process.platform === 'darwin') {
 
 const dbPath = path.join(dbDir, 'contract-manager.db')
 
-// Delete old DB if it exists so we get a clean seed
-if (fs.existsSync(dbPath)) {
-  fs.unlinkSync(dbPath)
-  console.log('[seed] Deleted old database')
+// Delete old DB and companion WAL/SHM files for a clean seed
+for (const ext of ['', '-wal', '-shm']) {
+  const f = dbPath + ext
+  if (fs.existsSync(f)) {
+    fs.unlinkSync(f)
+    console.log('[seed] Deleted', path.basename(f))
+  }
 }
 
 fs.mkdirSync(dbDir, { recursive: true })

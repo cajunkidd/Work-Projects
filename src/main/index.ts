@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import path from 'path'
 import { pathToFileURL } from 'url'
-import { initDatabase, updateContractStatuses } from './database'
+import { initDatabase, getDb, updateContractStatuses } from './database'
+import { seedDemoData } from './seedDemoData'
 import { registerUserHandlers } from './ipc/users'
 import { registerBudgetHandlers } from './ipc/budget'
 import { registerContractHandlers } from './ipc/contracts'
@@ -64,6 +65,13 @@ app.whenReady().then(() => {
 
   // Init database (will use userData path by default)
   initDatabase()
+
+  // Seed demo data (uses the actual open db, wrapped in try-catch so app always starts)
+  try {
+    seedDemoData(getDb())
+  } catch (err) {
+    console.error('[seed] Error seeding demo data:', err)
+  }
 
   // Register all IPC handlers
   registerUserHandlers()
