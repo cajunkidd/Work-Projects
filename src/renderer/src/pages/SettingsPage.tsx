@@ -57,6 +57,18 @@ export default function SettingsPage() {
     branch_ids: [] as number[]
   })
 
+  // Edit user
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    password: '',
+    role: 'store_manager',
+    department_ids: [] as number[],
+    branch_ids: [] as number[]
+  })
+
   // Budget — supports department or branch
   const [budgetScope, setBudgetScope] = useState<'company' | 'department' | 'branch'>('company')
   const [budgetDeptId, setBudgetDeptId] = useState('')
@@ -246,6 +258,23 @@ export default function SettingsPage() {
     if (id === currentUser?.id) return
     await window.api.users.delete(id)
     setUsers((prev) => prev.filter((u) => u.id !== id))
+  }
+
+  const handleOpenEdit = (u: User) => {
+    setEditingUser(u)
+    setEditForm({ name: u.name, email: u.email, password: '', role: u.role, department_ids: u.department_ids, branch_ids: u.branch_ids })
+    setShowEditModal(true)
+  }
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editingUser) return
+    const payload: any = { id: editingUser.id, name: editForm.name, email: editForm.email, role: editForm.role, department_ids: editForm.department_ids, branch_ids: editForm.branch_ids }
+    if (editForm.password) payload.password = editForm.password
+    await window.api.users.update(payload)
+    setShowEditModal(false)
+    setEditingUser(null)
+    load()
   }
 
   const roleLabel = (role: string) => {
@@ -696,6 +725,7 @@ export default function SettingsPage() {
                   <Badge variant={roleBadgeVariant(u.role)}>
                     {roleLabel(u.role)}
                   </Badge>
+                  <button onClick={() => handleOpenEdit(u)} className="text-slate-400 hover:text-white text-sm transition-colors">Edit</button>
                   {u.id !== currentUser?.id && (
                     <button onClick={() => handleDeleteUser(u.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
                   )}
@@ -705,6 +735,88 @@ export default function SettingsPage() {
           </div>
         </section>
       </RoleGuard>
+
+      {/* ─── Edit User Modal ─── */}
+      <Modal open={showEditModal} onClose={() => { setShowEditModal(false); setEditingUser(null) }} title="Edit User">
+        <form onSubmit={handleUpdateUser} className="space-y-4">
+          <Input label="Full Name" value={editForm.name} onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))} required />
+          <Input label="Email" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} required />
+          <Input label="New Password" type="password" value={editForm.password} onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))} placeholder="Leave blank to keep current password" />
+          <Select
+            label="Role"
+            value={editForm.role}
+            onChange={(e) => setEditForm((f) => ({ ...f, role: e.target.value, department_ids: [], branch_ids: [] }))}
+            options={[
+              { value: 'super_admin', label: 'Super Admin' },
+              { value: 'director', label: 'Director' },
+              { value: 'store_manager', label: 'Store Manager' }
+            ]}
+          />
+
+          {/* Branch access */}
+          {(editForm.role === 'store_manager' || editForm.role === 'director') && (
+            <div className="flex flex-col gap-1">
+              <label className="text-slate-300 text-sm font-medium">
+                {editForm.role === 'store_manager' ? 'Assigned Branch' : 'Assigned Branches'}
+              </label>
+              <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+                {branches.map((b) => (
+                  <label key={b.id} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type={editForm.role === 'store_manager' ? 'radio' : 'checkbox'}
+                      name="edit_branch_select"
+                      checked={editForm.branch_ids.includes(b.id)}
+                      onChange={(e) => {
+                        if (editForm.role === 'store_manager') {
+                          setEditForm((f) => ({ ...f, branch_ids: e.target.checked ? [b.id] : [] }))
+                        } else {
+                          setEditForm((f) => ({
+                            ...f,
+                            branch_ids: e.target.checked
+                              ? [...f.branch_ids, b.id]
+                              : f.branch_ids.filter((id) => id !== b.id)
+                          }))
+                        }
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-slate-300 text-sm">Branch {b.number} – {b.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Department access — directors only */}
+          {editForm.role === 'director' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-slate-300 text-sm font-medium">Assigned Departments</label>
+              <div className="flex flex-wrap gap-2">
+                {departments.map((d) => (
+                  <label key={d.id} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={editForm.department_ids.includes(d.id)}
+                      onChange={(e) => {
+                        setEditForm((f) => ({
+                          ...f,
+                          department_ids: e.target.checked
+                            ? [...f.department_ids, d.id]
+                            : f.department_ids.filter((id) => id !== d.id)
+                        }))
+                      }}
+                      className="rounded"
+                    />
+                    <span className="text-slate-300 text-sm">{d.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <Button type="submit" className="w-full justify-center">Save Changes</Button>
+        </form>
+      </Modal>
 
       <Modal open={showUserModal} onClose={() => setShowUserModal(false)} title="Add User">
         <form onSubmit={handleCreateUser} className="space-y-4">
