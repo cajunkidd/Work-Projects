@@ -2,6 +2,7 @@ import Database from 'better-sqlite3'
 import { app } from 'electron'
 import path from 'path'
 import fs from 'fs'
+import { seedDemoData } from './seedDemoData'
 
 let db: Database.Database
 
@@ -14,6 +15,8 @@ export function initDatabase(customPath?: string): void {
     ? path.join(customPath, 'contract-manager.db')
     : path.join(app.getPath('userData'), 'contract-manager.db')
 
+  console.log('[db] Opening database at:', dbPath)
+
   const dbDir = path.dirname(dbPath)
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true })
@@ -24,6 +27,9 @@ export function initDatabase(customPath?: string): void {
   db.pragma('foreign_keys = ON')
 
   runMigrations()
+
+  // Seed demo data right after migrations, using the actual open database
+  seedDemoData()
 }
 
 export function switchDatabase(newPath: string): void {
