@@ -86,7 +86,7 @@ app.whenReady().then(() => {
   })
 
   // Seed demo data (runs only if DB is empty)
-  seedDemoData().catch((err) => console.error('[seed] Error:', err))
+  seedDemoData()
 
   // Update contract statuses on startup
   updateContractStatuses()
