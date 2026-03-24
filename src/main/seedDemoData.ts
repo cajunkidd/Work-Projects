@@ -8,67 +8,60 @@ import bcrypt from 'bcryptjs'
 export function seedDemoData(): void {
   const db = getDb()
 
-  // Guard: skip if already seeded (uses a flag, not contract count)
-  const flag = db.prepare("SELECT value FROM app_settings WHERE key = 'demo_seeded'").get() as
-    | { value: string }
-    | undefined
-  if (flag?.value === 'true') return
+  // Always ensure demo users exist with correct passwords (upsert)
+  const hash = bcrypt.hashSync('demo123', 10)
 
-  // Wrap everything in a transaction for atomicity & speed
+  // Fetch/create departments first (needed for user assignments)
+  const deptInsert = db.prepare('INSERT OR IGNORE INTO departments (name) VALUES (?)')
+  ;['Information Technology', 'Operations', 'Marketing', 'Human Resources', 'Finance'].forEach((d) => deptInsert.run(d))
+
+  const deptRows = db.prepare('SELECT id, name FROM departments').all() as {
+    id: number
+    name: string
+  }[]
+  const deptMap: Record<string, number> = {}
+  deptRows.forEach((r) => (deptMap[r.name] = r.id))
+
+  const branchRows = db.prepare('SELECT id, number, name FROM branches').all() as {
+    id: number
+    number: number
+    name: string
+  }[]
+
+  // Upsert demo users — always force the password hash so login works
+  const userUpsert = db.prepare(`
+    INSERT INTO users (name, email, password_hash, role, department_ids, branch_ids)
+    VALUES (?,?,?,?,?,?)
+    ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash,
+      role = excluded.role, department_ids = excluded.department_ids,
+      branch_ids = excluded.branch_ids
+  `)
+  userUpsert.run('Admin User', 'admin@demo.com', hash, 'super_admin', '[]', '[]')
+  userUpsert.run(
+    'Sarah Mitchell',
+    'sarah@demo.com',
+    hash,
+    'director',
+    JSON.stringify([deptMap['Information Technology'], deptMap['Operations']]),
+    JSON.stringify(branchRows.slice(0, 5).map((b) => b.id))
+  )
+  userUpsert.run(
+    'James Cooper',
+    'james@demo.com',
+    hash,
+    'store_manager',
+    '[]',
+    JSON.stringify([branchRows[0]?.id])
+  )
+
+  console.log('[seed] Demo users upserted (admin@demo.com / demo123)')
+
+  // Guard: skip rest of seeding if already done
+  const existing = db.prepare('SELECT COUNT(*) as cnt FROM contracts').get() as { cnt: number }
+  if (existing.cnt > 0) return
+
+  // Wrap the rest in a transaction for atomicity & speed
   db.transaction(() => {
-    // ── Mark as seeded ───────────────────────────────────────────────────
-    db.prepare(
-      "INSERT OR REPLACE INTO app_settings (key, value) VALUES ('demo_seeded', 'true')"
-    ).run()
-
-    // ── Departments ──────────────────────────────────────────────────────
-    const deptInsert = db.prepare('INSERT OR IGNORE INTO departments (name) VALUES (?)')
-    const departments = [
-      'Information Technology',
-      'Operations',
-      'Marketing',
-      'Human Resources',
-      'Finance'
-    ]
-    departments.forEach((d) => deptInsert.run(d))
-
-    // Fetch department IDs
-    const deptRows = db.prepare('SELECT id, name FROM departments').all() as {
-      id: number
-      name: string
-    }[]
-    const deptMap: Record<string, number> = {}
-    deptRows.forEach((r) => (deptMap[r.name] = r.id))
-
-    // ── Branches (already seeded by migration, just fetch) ───────────────
-    const branchRows = db.prepare('SELECT id, number, name FROM branches').all() as {
-      id: number
-      number: number
-      name: string
-    }[]
-
-    // ── Users ────────────────────────────────────────────────────────────
-    const hash = bcrypt.hashSync('demo123', 10)
-    const userInsert = db.prepare(
-      'INSERT OR IGNORE INTO users (name, email, password_hash, role, department_ids, branch_ids) VALUES (?,?,?,?,?,?)'
-    )
-    userInsert.run('Admin User', 'admin@demo.com', hash, 'super_admin', '[]', '[]')
-    userInsert.run(
-      'Sarah Mitchell',
-      'sarah@demo.com',
-      hash,
-      'director',
-      JSON.stringify([deptMap['Information Technology'], deptMap['Operations']]),
-      JSON.stringify(branchRows.slice(0, 5).map((b) => b.id))
-    )
-    userInsert.run(
-      'James Cooper',
-      'james@demo.com',
-      hash,
-      'store_manager',
-      '[]',
-      JSON.stringify([branchRows[0]?.id])
-    )
 
     // ── Budget (FY 2026) ────────────────────────────────────────────────
     const budgetInsert = db.prepare(
