@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { ipcMain, dialog } from 'electron'
+import path from 'path'
 import { getDb } from '../database'
 import { notifyBudgetUpdated } from '../emailNotifier'
 import type { IpcResponse, Budget, BudgetSummary, Department, Branch, ContractAllocation } from '../../shared/types'
@@ -122,16 +123,18 @@ export function registerBudgetHandlers(): void {
     'budget:upsert',
     async (
       _e,
-      payload: { department_id: number | null; branch_id: number | null; fiscal_year: number; total_amount: number }
+      payload: { department_id: number | null; branch_id: number | null; fiscal_year: number; total_amount: number; file_path?: string | null }
     ): Promise<IpcResponse<void>> => {
       try {
         getDb()
           .prepare(
-            `INSERT INTO budget (department_id, branch_id, fiscal_year, total_amount)
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT(department_id, branch_id, fiscal_year) DO UPDATE SET total_amount = excluded.total_amount`
+            `INSERT INTO budget (department_id, branch_id, fiscal_year, total_amount, file_path)
+             VALUES (?, ?, ?, ?, ?)
+             ON CONFLICT(department_id, branch_id, fiscal_year) DO UPDATE SET
+               total_amount = excluded.total_amount,
+               file_path = excluded.file_path`
           )
-          .run(payload.department_id, payload.branch_id, payload.fiscal_year, payload.total_amount)
+          .run(payload.department_id, payload.branch_id, payload.fiscal_year, payload.total_amount, payload.file_path ?? null)
         notifyBudgetUpdated(getDb(), payload).catch(() => {})
         return { success: true }
       } catch (err: any) {
@@ -139,6 +142,21 @@ export function registerBudgetHandlers(): void {
       }
     }
   )
+
+  ipcMain.handle('budget:uploadFile', async (): Promise<IpcResponse<{ path: string }>> => {
+    try {
+      const result = await dialog.showOpenDialog({
+        filters: [{ name: 'Documents', extensions: ['pdf', 'doc', 'docx'] }],
+        properties: ['openFile']
+      })
+      if (result.canceled || result.filePaths.length === 0) {
+        return { success: false, error: 'No file selected' }
+      }
+      return { success: true, data: { path: result.filePaths[0] } }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
 
   // Budget summaries with spend
   // Accepts optional filter: { role, department_ids, branch_ids } for scoped access

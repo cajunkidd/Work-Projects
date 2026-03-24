@@ -42,6 +42,7 @@ export interface Budget {
   branch_id: number | null     // null when department-level or company-level
   fiscal_year: number
   total_amount: number
+  file_path?: string
   created_at: string
 }
 

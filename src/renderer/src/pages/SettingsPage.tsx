@@ -65,6 +65,7 @@ export default function SettingsPage() {
   const [budgetYear, setBudgetYear] = useState(String(new Date().getFullYear()))
   const [budgetSaving, setBudgetSaving] = useState(false)
   const [budgetMsg, setBudgetMsg] = useState('')
+  const [budgetFile, setBudgetFile] = useState<string | null>(null)
 
   // DB path
   const [dbPath, setDbPath] = useState('')
@@ -215,7 +216,8 @@ export default function SettingsPage() {
       department_id: budgetScope === 'department' && budgetDeptId ? parseInt(budgetDeptId) : null,
       branch_id: budgetScope === 'branch' && budgetBranchId ? parseInt(budgetBranchId) : null,
       fiscal_year: parseInt(budgetYear),
-      total_amount: parseFloat(budgetAmount) || 0
+      total_amount: parseFloat(budgetAmount) || 0,
+      file_path: budgetFile || null
     })
     setBudgetSaving(false)
     setBudgetMsg('Budget saved!')
@@ -387,6 +389,15 @@ export default function SettingsPage() {
               <div className="grid grid-cols-2 gap-4">
                 <Input label="Fiscal Year" type="number" value={budgetYear} onChange={(e) => setBudgetYear(e.target.value)} required />
                 <Input label="Total Budget ($)" type="number" min="0" step="0.01" value={budgetAmount} onChange={(e) => setBudgetAmount(e.target.value)} required />
+              </div>
+              <div className="flex items-center gap-3">
+                <Button type="button" variant="secondary" onClick={async () => {
+                  const res = await window.api.budget.uploadFile()
+                  if (res.success && res.data) setBudgetFile(res.data.path)
+                }}>
+                  📁 Attach Document
+                </Button>
+                {budgetFile && <span className="text-emerald-400 text-sm truncate max-w-xs">✓ {budgetFile.split(/[\\/]/).pop()}</span>}
               </div>
               <div className="flex items-center gap-3">
                 <Button type="submit" disabled={budgetSaving}>Save Budget</Button>

@@ -28,7 +28,8 @@ contextBridge.exposeInMainWorld('api', {
   budget: {
     list: () => ipcRenderer.invoke('budget:list'),
     upsert: (payload: any) => ipcRenderer.invoke('budget:upsert', payload),
-    summaries: (fiscal_year: number, filter?: any) => ipcRenderer.invoke('budget:summaries', fiscal_year, filter)
+    summaries: (fiscal_year: number, filter?: any) => ipcRenderer.invoke('budget:summaries', fiscal_year, filter),
+    uploadFile: () => ipcRenderer.invoke('budget:uploadFile')
   },
 
   // Contracts

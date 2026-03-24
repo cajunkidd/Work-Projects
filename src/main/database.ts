@@ -150,6 +150,7 @@ function runMigrations(): void {
   runV3Migration()
   runV4Migration()
   runV5Migration()
+  runV6Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -367,6 +368,15 @@ function runV5Migration(): void {
   `)
 
   db.pragma('user_version = 5')
+}
+
+function runV6Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 6) return
+
+  db.exec(`ALTER TABLE budget ADD COLUMN file_path TEXT;`)
+
+  db.pragma('user_version = 6')
 }
 
 export function updateContractStatuses(): void {

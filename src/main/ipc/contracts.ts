@@ -214,7 +214,7 @@ export function registerContractHandlers(): void {
   ipcMain.handle('contracts:uploadFile', async (): Promise<IpcResponse<{ path: string; text?: string; rows?: Record<string,string>[] }>> => {
     try {
       const result = await dialog.showOpenDialog({
-        filters: [{ name: 'Contracts', extensions: ['pdf', 'xlsx', 'xls'] }],
+        filters: [{ name: 'Contracts', extensions: ['pdf', 'xlsx', 'xls', 'doc', 'docx'] }],
         properties: ['openFile']
       })
       if (result.canceled || result.filePaths.length === 0) {
@@ -226,9 +226,11 @@ export function registerContractHandlers(): void {
       if (ext === '.pdf') {
         const text = await parsePdf(filePath)
         return { success: true, data: { path: filePath, text } }
-      } else {
+      } else if (ext === '.xlsx' || ext === '.xls') {
         const rows = await parseXlsx(filePath)
         return { success: true, data: { path: filePath, rows } }
+      } else {
+        return { success: true, data: { path: filePath } }
       }
     } catch (err: any) {
       return { success: false, error: err.message }
