@@ -16,6 +16,7 @@ import { registerAssetHandlers } from './ipc/assets'
 import { registerExportHandlers } from './ipc/exports'
 import { registerContractCreationHandlers } from './ipc/contractCreation'
 import { startScheduler, getUpcomingRenewals } from './scheduler'
+import { seedDemoData } from './seedDemoData'
 
 let mainWindow: BrowserWindow | null = null
 
@@ -83,6 +84,9 @@ app.whenReady().then(() => {
   ipcMain.handle('scheduler:upcomingRenewals', () => {
     return { success: true, data: getUpcomingRenewals() }
   })
+
+  // Seed demo data (runs only if DB is empty)
+  seedDemoData().catch((err) => console.error('[seed] Error:', err))
 
   // Update contract statuses on startup
   updateContractStatuses()
