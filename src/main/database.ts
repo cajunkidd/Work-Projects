@@ -36,9 +36,12 @@ export function initDatabase(customPath?: string): void {
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
 
-  // Foreign keys OFF during migrations (table renames break FK refs in SQLite 3.26+)
+  // legacy_alter_table prevents SQLite 3.26+ from rewriting FK references
+  // in other tables when ALTER TABLE RENAME is used during migrations
   db.pragma('foreign_keys = OFF')
+  db.pragma('legacy_alter_table = ON')
   runMigrations()
+  db.pragma('legacy_alter_table = OFF')
   db.pragma('foreign_keys = ON')
 }
 
