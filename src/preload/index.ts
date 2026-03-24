@@ -129,6 +129,21 @@ contextBridge.exposeInMainWorld('api', {
     contractDetail: (payload: any) => ipcRenderer.invoke('exports:contractDetail', payload)
   },
 
+  // Reports
+  reports: {
+    overview: () => ipcRenderer.invoke('reports:overview'),
+    vendorSpend: () => ipcRenderer.invoke('reports:vendorSpend'),
+    monthlyTrend: () => ipcRenderer.invoke('reports:monthlyTrend'),
+    renewals: () => ipcRenderer.invoke('reports:renewals'),
+    budgetVsActual: (fiscal_year: number) => ipcRenderer.invoke('reports:budgetVsActual', fiscal_year),
+    invoiceSummary: () => ipcRenderer.invoke('reports:invoiceSummary'),
+    spendByDept: () => ipcRenderer.invoke('reports:spendByDept'),
+    spendByBranch: () => ipcRenderer.invoke('reports:spendByBranch'),
+    contractList: () => ipcRenderer.invoke('reports:contractList'),
+    export: (payload: any) => ipcRenderer.invoke('reports:export', payload),
+    email: (payload: any) => ipcRenderer.invoke('reports:email', payload)
+  },
+
   // Contract Creation & E-Signature
   contractCreation: {
     saveTemplate: (payload: any) => ipcRenderer.invoke('contractCreation:saveTemplate', payload),
