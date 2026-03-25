@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import Input from '../components/ui/Input'
 import RoleGuard from '../components/layout/RoleGuard'
 import type { Invoice } from '../../../shared/types'
 
@@ -15,18 +16,20 @@ export default function InvoicesPage() {
   const { selectedDeptId } = useThemeStore()
   const { can } = useAuthStore()
   const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [search, setSearch] = useState('')
   const [polling, setPolling] = useState(false)
   const [pollMsg, setPollMsg] = useState('')
 
   const load = () => {
     const opts: any = {}
     if (selectedDeptId) opts.department_id = selectedDeptId
+    if (search) opts.search = search
     window.api.invoices.list(opts).then((res) => {
       if (res.success && res.data) setInvoices(res.data)
     })
   }
 
-  useEffect(() => { load() }, [selectedDeptId])
+  useEffect(() => { load() }, [selectedDeptId, search])
 
   const handlePoll = async () => {
     setPolling(true)
@@ -49,7 +52,29 @@ export default function InvoicesPage() {
 
   const discrepancies = invoices.filter((i) => i.amount > (i.budgeted_amount || 0) * 1.05)
 
+  // Inline GL code editing
+  const [editingGl, setEditingGl] = useState<number | null>(null)
+  const [glDraft, setGlDraft] = useState('')
+
+  const saveGlCode = async (id: number) => {
+    await window.api.invoices.update({ id, gl_code: glDraft })
+    setEditingGl(null)
+    load()
+  }
+
   const [exportMsg, setExportMsg] = useState('')
+
+  const handleGpExport = async () => {
+    const res = await window.api.exports.gpImport(invoices)
+    if (res.success) {
+      setExportMsg('GP file exported!')
+      setTimeout(() => setExportMsg(''), 3000)
+    } else if (res.error !== 'Cancelled') {
+      setExportMsg(`Error: ${res.error}`)
+      setTimeout(() => setExportMsg(''), 4000)
+    }
+  }
+
   const handleExport = async () => {
     const res = await window.api.exports.invoices(invoices)
     if (res.success) {
@@ -70,7 +95,8 @@ export default function InvoicesPage() {
         </div>
         <div className="flex items-center gap-3">
           {exportMsg && <span className={`text-sm ${exportMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{exportMsg}</span>}
-          <Button variant="ghost" onClick={handleExport} disabled={invoices.length === 0}>Export</Button>
+          <Button variant="ghost" onClick={handleGpExport} disabled={invoices.length === 0}>Export GP</Button>
+          <Button variant="ghost" onClick={handleExport} disabled={invoices.length === 0}>Export XLSX</Button>
           <RoleGuard minRole="admin">
             <div className="flex items-center gap-3">
               {pollMsg && <span className="text-sm text-slate-300">{pollMsg}</span>}
@@ -81,6 +107,14 @@ export default function InvoicesPage() {
           </RoleGuard>
         </div>
       </div>
+
+      {/* Search */}
+      <Input
+        placeholder="Search by GL code, subject, sender, or vendor..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="max-w-md"
+      />
 
       {/* Discrepancy alert */}
       {discrepancies.length > 0 && (
@@ -113,6 +147,29 @@ export default function InvoicesPage() {
                     {inv.vendor_name && (
                       <p className="text-slate-400 text-sm">Vendor: <span className="text-slate-300">{inv.vendor_name}</span></p>
                     )}
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <span className="text-slate-400 text-sm">GL:</span>
+                      {editingGl === inv.id ? (
+                        <span className="flex items-center gap-1">
+                          <input
+                            className="bg-slate-900 border border-slate-600 text-white text-xs rounded px-2 py-0.5 w-32 focus:outline-none"
+                            value={glDraft}
+                            onChange={(e) => setGlDraft(e.target.value)}
+                            onKeyDown={(e) => { if (e.key === 'Enter') saveGlCode(inv.id); if (e.key === 'Escape') setEditingGl(null) }}
+                            autoFocus
+                          />
+                          <button onClick={() => saveGlCode(inv.id)} className="text-emerald-400 text-xs hover:text-emerald-300">Save</button>
+                          <button onClick={() => setEditingGl(null)} className="text-slate-500 text-xs hover:text-slate-300">Cancel</button>
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => { setEditingGl(inv.id); setGlDraft(inv.gl_code || '') }}
+                          className="text-slate-300 text-sm hover:text-white transition-colors"
+                        >
+                          {inv.gl_code || <span className="text-slate-500 italic">add code</span>}
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right flex-shrink-0 space-y-1">
                     <p className="text-white font-bold text-lg">{fmt(inv.amount)}</p>

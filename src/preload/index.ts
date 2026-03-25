@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('api', {
   invoices: {
     list: (opts?: any) => ipcRenderer.invoke('invoices:list', opts),
     delete: (id: number) => ipcRenderer.invoke('invoices:delete', id),
+    update: (payload: any) => ipcRenderer.invoke('invoices:update', payload),
     insert: (payload: any) => ipcRenderer.invoke('invoices:insert', payload)
   },
 
@@ -126,7 +127,8 @@ contextBridge.exposeInMainWorld('api', {
   exports: {
     invoices: (data: any[]) => ipcRenderer.invoke('exports:invoices', data),
     contractsList: (data: any[]) => ipcRenderer.invoke('exports:contractsList', data),
-    contractDetail: (payload: any) => ipcRenderer.invoke('exports:contractDetail', payload)
+    contractDetail: (payload: any) => ipcRenderer.invoke('exports:contractDetail', payload),
+    gpImport: (data: any[]) => ipcRenderer.invoke('exports:gpImport', data)
   },
 
   // Contract Creation & E-Signature

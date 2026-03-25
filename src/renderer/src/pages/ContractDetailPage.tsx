@@ -51,6 +51,8 @@ export default function ContractDetailPage() {
   const [draftAllocations, setDraftAllocations] = useState<AllocationRow[]>([])
   const [savingAllocations, setSavingAllocations] = useState(false)
   const [assetSummary, setAssetSummary] = useState<{ totalMachines: number; branchCount: number } | null>(null)
+  const [editingGl, setEditingGl] = useState(false)
+  const [glDraft, setGlDraft] = useState('')
   const [exportMsg, setExportMsg] = useState('')
   const [allBranches, setAllBranches] = useState<import('../../../shared/types').Branch[]>([])
   const [allDepartments, setAllDepartments] = useState<import('../../../shared/types').Department[]>([])
@@ -267,6 +269,7 @@ export default function ContractDetailPage() {
               {contract.status.replace('_', ' ')}
             </Badge>
             <span className="text-slate-400 text-sm">{contract.department_name}</span>
+            {contract.gl_code && <span className="text-slate-400 text-sm">· GL: {contract.gl_code}</span>}
             {contract.days_until_renewal !== undefined && contract.days_until_renewal >= 0 && (
               <span className="text-slate-400 text-sm">· {contract.days_until_renewal} days to renewal</span>
             )}
@@ -325,6 +328,47 @@ export default function ContractDetailPage() {
                 <div><span className="text-slate-400">Name: </span><span className="text-white">{contract.poc_name || '—'}</span></div>
                 <div><span className="text-slate-400">Email: </span><span className="text-white">{contract.poc_email || '—'}</span></div>
                 <div><span className="text-slate-400">Phone: </span><span className="text-white">{contract.poc_phone || '—'}</span></div>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="text-white font-semibold">GL Code</h3>
+              <div className="flex items-center gap-2">
+                {editingGl ? (
+                  <>
+                    <input
+                      className="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-1.5 w-40 focus:outline-none"
+                      value={glDraft}
+                      onChange={(e) => setGlDraft(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          window.api.contracts.update({ id: contractId, gl_code: glDraft }).then(() => {
+                            setContract((c) => c ? { ...c, gl_code: glDraft } : c)
+                            setEditingGl(false)
+                          })
+                        }
+                        if (e.key === 'Escape') setEditingGl(false)
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => {
+                        window.api.contracts.update({ id: contractId, gl_code: glDraft }).then(() => {
+                          setContract((c) => c ? { ...c, gl_code: glDraft } : c)
+                          setEditingGl(false)
+                        })
+                      }}
+                      className="text-emerald-400 text-xs hover:text-emerald-300"
+                    >Save</button>
+                    <button onClick={() => setEditingGl(false)} className="text-slate-500 text-xs hover:text-slate-300">Cancel</button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { setGlDraft(contract.gl_code || ''); setEditingGl(true) }}
+                    className="text-white text-sm hover:text-slate-300 transition-colors"
+                  >
+                    {contract.gl_code || <span className="text-slate-500 italic">Click to add GL code</span>}
+                  </button>
+                )}
               </div>
             </div>
             <div className="space-y-3">

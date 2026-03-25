@@ -150,6 +150,7 @@ function runMigrations(): void {
   runV3Migration()
   runV4Migration()
   runV5Migration()
+  runV6Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -367,6 +368,24 @@ function runV5Migration(): void {
   `)
 
   db.pragma('user_version = 5')
+}
+
+function runV6Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 6) return
+
+  // Add gl_code column to contracts and invoices
+  const contractCols = db.prepare("PRAGMA table_info(contracts)").all() as { name: string }[]
+  if (!contractCols.some((c) => c.name === 'gl_code')) {
+    db.exec("ALTER TABLE contracts ADD COLUMN gl_code TEXT NOT NULL DEFAULT ''")
+  }
+
+  const invoiceCols = db.prepare("PRAGMA table_info(invoices)").all() as { name: string }[]
+  if (!invoiceCols.some((c) => c.name === 'gl_code')) {
+    db.exec("ALTER TABLE invoices ADD COLUMN gl_code TEXT NOT NULL DEFAULT ''")
+  }
+
+  db.pragma('user_version = 6')
 }
 
 export function clearAllData(): void {

@@ -106,6 +106,7 @@ export interface Contract {
   department_name?: string
   branch_id: number | null
   branch_name?: string
+  gl_code: string
   file_path?: string
   notes_count?: number
   created_at: string
@@ -156,6 +157,7 @@ export interface Invoice {
   amount: number
   budgeted_amount: number
   received_date: string
+  gl_code: string
   is_deleted: number
 }
 

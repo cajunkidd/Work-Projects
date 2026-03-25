@@ -5,7 +5,7 @@ import type { IpcResponse, Invoice } from '../../shared/types'
 export function registerInvoiceHandlers(): void {
   ipcMain.handle(
     'invoices:list',
-    async (_e, opts?: { department_id?: number; show_deleted?: boolean }): Promise<IpcResponse<Invoice[]>> => {
+    async (_e, opts?: { department_id?: number; show_deleted?: boolean; search?: string }): Promise<IpcResponse<Invoice[]>> => {
       try {
         const db = getDb()
         let query = `
@@ -22,6 +22,10 @@ export function registerInvoiceHandlers(): void {
         if (opts?.department_id) {
           query += ' AND c.department_id = ?'
           params.push(opts.department_id)
+        }
+        if (opts?.search) {
+          query += ' AND (i.gl_code LIKE ? OR i.subject LIKE ? OR i.sender LIKE ? OR c.vendor_name LIKE ?)'
+          params.push(`%${opts.search}%`, `%${opts.search}%`, `%${opts.search}%`, `%${opts.search}%`)
         }
         query += ' ORDER BY i.received_date DESC'
 
@@ -45,6 +49,21 @@ export function registerInvoiceHandlers(): void {
   })
 
   ipcMain.handle(
+    'invoices:update',
+    async (_e, payload: { id: number; gl_code?: string; budgeted_amount?: number }): Promise<IpcResponse<void>> => {
+      try {
+        const fields = Object.keys(payload).filter((k) => k !== 'id')
+        const sets = fields.map((f) => `${f} = ?`).join(', ')
+        const values = fields.map((f) => (payload as any)[f])
+        getDb().prepare(`UPDATE invoices SET ${sets} WHERE id = ?`).run(...values, payload.id)
+        return { success: true }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
     'invoices:insert',
     async (
       _e,
@@ -60,8 +79,8 @@ export function registerInvoiceHandlers(): void {
         const result = db
           .prepare(
             `INSERT INTO invoices
-             (contract_id, gmail_message_id, subject, sender, amount, budgeted_amount, received_date)
-             VALUES (?,?,?,?,?,?,?)`
+             (contract_id, gmail_message_id, subject, sender, amount, budgeted_amount, received_date, gl_code)
+             VALUES (?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.contract_id,
@@ -70,7 +89,8 @@ export function registerInvoiceHandlers(): void {
             payload.sender,
             payload.amount,
             payload.budgeted_amount,
-            payload.received_date
+            payload.received_date,
+            payload.gl_code || ''
           )
         const row = db
           .prepare('SELECT * FROM invoices WHERE id = ?')

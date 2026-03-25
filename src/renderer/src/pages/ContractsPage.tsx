@@ -26,6 +26,7 @@ const emptyForm = {
   vendor_name: '', status: 'active', start_date: '', end_date: '',
   monthly_cost: '', annual_cost: '', total_cost: '',
   poc_name: '', poc_email: '', poc_phone: '',
+  gl_code: '',
   scope: 'department' as 'department' | 'branch',
   department_id: '',
   branch_id: '',
@@ -35,6 +36,7 @@ const emptyForm = {
 const emptyFilters = {
   vendor: '',
   pocName: '',
+  glCode: '',
   status: [] as string[],
   costField: 'annual_cost' as 'annual_cost' | 'monthly_cost' | 'total_cost',
   costOp: 'any' as 'any' | 'over' | 'under' | 'between',
@@ -82,6 +84,7 @@ function ContractList({ contracts, onNavigate }: { contracts: Contract[]; onNavi
                 <span>Start: <span className="text-slate-300">{c.start_date}</span></span>
                 <span>End: <span className="text-slate-300">{c.end_date}</span></span>
                 <span>POC: <span className="text-slate-300">{c.poc_name}</span></span>
+                {c.gl_code && <span>GL: <span className="text-slate-300">{c.gl_code}</span></span>}
               </div>
             </div>
             <div className="text-right flex-shrink-0">
@@ -169,6 +172,7 @@ export default function ContractsPage() {
       poc_name: form.poc_name,
       poc_email: form.poc_email,
       poc_phone: form.poc_phone,
+      gl_code: form.gl_code,
       department_id: form.scope === 'department' && form.department_id ? parseInt(form.department_id) : null,
       branch_id: form.scope === 'branch' && form.branch_id ? parseInt(form.branch_id) : null,
       file_path: form.file_path || null
@@ -210,6 +214,7 @@ export default function ContractsPage() {
     return contracts.filter((c) => {
       if (filters.vendor && !c.vendor_name.toLowerCase().includes(filters.vendor.toLowerCase())) return false
       if (filters.pocName && !c.poc_name.toLowerCase().includes(filters.pocName.toLowerCase())) return false
+      if (filters.glCode && !(c.gl_code || '').toLowerCase().includes(filters.glCode.toLowerCase())) return false
       if (filters.status.length > 0 && !filters.status.includes(c.status)) return false
 
       const cost = (c as any)[filters.costField] as number
@@ -250,7 +255,7 @@ export default function ContractsPage() {
     }
   }
 
-  const hasActiveFilters = filters.vendor || filters.pocName || filters.status.length > 0 ||
+  const hasActiveFilters = filters.vendor || filters.pocName || filters.glCode || filters.status.length > 0 ||
     filters.costOp !== 'any' || filters.startFrom || filters.startTo ||
     filters.endFrom || filters.endTo || filters.department_id || filters.branch_id || filters.renewalWithin
 
@@ -344,6 +349,17 @@ export default function ContractsPage() {
                 placeholder="Search contact name..."
                 value={filters.pocName}
                 onChange={(e) => setFilter('pocName', e.target.value)}
+              />
+            </div>
+
+            {/* GL Code */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">GL Code</label>
+              <input
+                className={inputCls}
+                placeholder="Search GL code..."
+                value={filters.glCode}
+                onChange={(e) => setFilter('glCode', e.target.value)}
               />
             </div>
 
@@ -545,8 +561,9 @@ export default function ContractsPage() {
       {/* New Contract Modal */}
       <Modal open={showModal} onClose={() => { setShowModal(false); setNeedsAllocation(false); setAllocations([]) }} title="New Contract" width="max-w-2xl">
         <form onSubmit={handleSave} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Input label="Vendor Name" value={form.vendor_name} onChange={(e) => f('vendor_name', e.target.value)} required />
+            <Input label="GL Code" placeholder="e.g. 6000-100" value={form.gl_code} onChange={(e) => f('gl_code', e.target.value)} />
             <Select
               label="Contract Scope"
               value={form.scope}

@@ -27,6 +27,7 @@ export function registerExportHandlers(): void {
         const variance = amount - budgeted
         return {
           Date: inv.received_date ?? '',
+          'GL Code': inv.gl_code ?? '',
           Vendor: inv.vendor_name ?? '',
           Subject: inv.subject ?? '',
           Sender: inv.sender ?? '',
@@ -38,7 +39,7 @@ export function registerExportHandlers(): void {
 
       const ws = XLSX.utils.json_to_sheet(rows)
       // Format currency columns
-      const currencyCols = ['E', 'F', 'G']
+      const currencyCols = ['F', 'G', 'H']
       for (const col of currencyCols) {
         for (let r = 2; r <= rows.length + 1; r++) {
           const cell = ws[`${col}${r}`]
@@ -67,6 +68,7 @@ export function registerExportHandlers(): void {
       const XLSX = await import('xlsx')
       const rows = contracts.map((c) => ({
         Vendor: c.vendor_name ?? '',
+        'GL Code': c.gl_code ?? '',
         Status: c.status ?? '',
         Department: c.department_name ?? '',
         Branch: c.branch_name ?? '',
@@ -81,7 +83,7 @@ export function registerExportHandlers(): void {
       }))
 
       const ws = XLSX.utils.json_to_sheet(rows)
-      const currencyCols = ['G', 'H', 'I']
+      const currencyCols = ['H', 'I', 'J']
       for (const col of currencyCols) {
         for (let r = 2; r <= rows.length + 1; r++) {
           const cell = ws[`${col}${r}`]
@@ -92,6 +94,71 @@ export function registerExportHandlers(): void {
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Contracts')
       XLSX.writeFile(wb, result.filePath)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // ── Export for Microsoft Dynamics GP (Great Plains) ──────────────────────
+  ipcMain.handle('exports:gpImport', async (_e, invoices: any[]): Promise<IpcResponse<void>> => {
+    try {
+      const result = await dialog.showSaveDialog({
+        defaultPath: `gp-import-${todayStr()}.csv`,
+        filters: [{ name: 'CSV (Great Plains)', extensions: ['csv'] }]
+      })
+      if (result.canceled || !result.filePath) return { success: false, error: 'Cancelled' }
+
+      // Microsoft Dynamics GP General Journal import format
+      const header = [
+        'Batch ID',
+        'Journal Entry',
+        'Transaction Date',
+        'Account Number',
+        'Description',
+        'Debit Amount',
+        'Credit Amount',
+        'Reference'
+      ].join(',')
+
+      const batchId = `INV-${todayStr().replace(/-/g, '')}`
+      const lines = invoices.map((inv, idx) => {
+        const amount = Number(inv.amount) || 0
+        const date = inv.received_date ?? todayStr()
+        const glCode = (inv.gl_code ?? '').replace(/,/g, '')
+        const vendor = (inv.vendor_name ?? inv.sender ?? '').replace(/,/g, '')
+        const subject = (inv.subject ?? '').replace(/,/g, '')
+        const journalEntry = idx + 1
+
+        // Debit line (expense to GL account)
+        const debitLine = [
+          batchId,
+          journalEntry,
+          date,
+          glCode,
+          `${vendor} - ${subject}`.slice(0, 80),
+          amount.toFixed(2),
+          '0.00',
+          `INV-${inv.id ?? idx}`
+        ].join(',')
+
+        // Credit line (Accounts Payable offset)
+        const creditLine = [
+          batchId,
+          journalEntry,
+          date,
+          '2000-00',
+          `AP - ${vendor}`.slice(0, 80),
+          '0.00',
+          amount.toFixed(2),
+          `INV-${inv.id ?? idx}`
+        ].join(',')
+
+        return debitLine + '\n' + creditLine
+      })
+
+      const csv = header + '\n' + lines.join('\n') + '\n'
+      fs.writeFileSync(result.filePath, csv, 'utf8')
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }
@@ -125,6 +192,7 @@ export function registerExportHandlers(): void {
         // Sheet 1: Overview
         const overview = [
           { Field: 'Vendor', Value: contract.vendor_name ?? '' },
+          { Field: 'GL Code', Value: contract.gl_code ?? '' },
           { Field: 'Status', Value: contract.status ?? '' },
           { Field: 'Department', Value: contract.department_name ?? '' },
           { Field: 'Branch', Value: contract.branch_name ?? '' },

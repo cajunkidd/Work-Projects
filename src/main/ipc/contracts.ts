@@ -98,8 +98,8 @@ export function registerContractHandlers(): void {
         // super_admin: no additional filter
 
         if (opts?.search) {
-          query += ' AND (c.vendor_name LIKE ? OR c.poc_name LIKE ?)'
-          params.push(`%${opts.search}%`, `%${opts.search}%`)
+          query += ' AND (c.vendor_name LIKE ? OR c.poc_name LIKE ? OR c.gl_code LIKE ?)'
+          params.push(`%${opts.search}%`, `%${opts.search}%`, `%${opts.search}%`)
         }
         query += ' ORDER BY c.end_date ASC'
 
@@ -140,8 +140,8 @@ export function registerContractHandlers(): void {
           .prepare(
             `INSERT INTO contracts
              (vendor_name, status, start_date, end_date, monthly_cost, annual_cost, total_cost,
-              poc_name, poc_email, poc_phone, department_id, branch_id, file_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              poc_name, poc_email, poc_phone, department_id, branch_id, file_path, gl_code)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.vendor_name,
@@ -156,7 +156,8 @@ export function registerContractHandlers(): void {
             payload.poc_phone,
             payload.department_id ?? null,
             payload.branch_id ?? null,
-            payload.file_path || null
+            payload.file_path || null,
+            payload.gl_code || ''
           )
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
