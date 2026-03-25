@@ -1,6 +1,6 @@
 import { ipcMain, dialog } from 'electron'
 import path from 'path'
-import { getDb, switchDatabase } from '../database'
+import { getDb, switchDatabase, clearAllData } from '../database'
 import { sendTestEmail } from '../emailNotifier'
 import type { IpcResponse, AppSettings } from '../../shared/types'
 
@@ -192,6 +192,16 @@ export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:testEmail', async (_e, toEmail: string): Promise<IpcResponse<void>> => {
     try {
       await sendTestEmail(getDb(), toEmail)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  // Clear all data (reset database)
+  ipcMain.handle('settings:clearAllData', async (): Promise<IpcResponse<void>> => {
+    try {
+      clearAllData()
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }

@@ -369,6 +369,26 @@ function runV5Migration(): void {
   db.pragma('user_version = 5')
 }
 
+export function clearAllData(): void {
+  db.exec(`
+    DELETE FROM contract_line_items;
+    DELETE FROM renewal_history;
+    DELETE FROM competitor_offerings;
+    DELETE FROM vendor_projects;
+    DELETE FROM vendor_notes;
+    DELETE FROM contract_allocations;
+    DELETE FROM signing_requests;
+    DELETE FROM contract_templates;
+    DELETE FROM invoices;
+    DELETE FROM contracts;
+    DELETE FROM budget;
+    DELETE FROM branch_assets;
+    DELETE FROM departments;
+    DELETE FROM users;
+    DELETE FROM app_settings;
+  `)
+}
+
 export function updateContractStatuses(): void {
   db.exec(`
     UPDATE contracts SET status = 'expired'

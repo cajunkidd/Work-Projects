@@ -78,6 +78,11 @@ export default function SettingsPage() {
   const [documensoTesting, setDocumensoTesting] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
 
+  // Clear all data
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [clearMsg, setClearMsg] = useState('')
+
   const load = () => {
     window.api.settings.get().then((res) => {
       if (res.success && res.data) {
@@ -692,6 +697,51 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+        </section>
+      </RoleGuard>
+
+      {/* ─── Danger Zone ─── */}
+      <RoleGuard minRole="super_admin">
+        <section className="space-y-4">
+          <h2 className="text-red-400 font-semibold text-lg border-b border-red-900/40 pb-2">Danger Zone</h2>
+          <Card>
+            <div className="space-y-3">
+              <p className="text-slate-400 text-sm">
+                Permanently delete all contracts, departments, users, budgets, invoices, and other data.
+                Branch locations will be preserved.
+              </p>
+              {!showClearConfirm ? (
+                <Button variant="danger" onClick={() => setShowClearConfirm(true)}>Clear All Data</Button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-red-400 text-sm font-medium">Are you sure? This cannot be undone.</p>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="danger"
+                      disabled={clearing}
+                      onClick={async () => {
+                        setClearing(true)
+                        const res = await window.api.settings.clearAllData()
+                        setClearing(false)
+                        setShowClearConfirm(false)
+                        if (res.success) {
+                          setClearMsg('All data cleared successfully.')
+                          load()
+                        } else {
+                          setClearMsg(`Error: ${res.error}`)
+                        }
+                        setTimeout(() => setClearMsg(''), 5000)
+                      }}
+                    >
+                      {clearing ? 'Clearing...' : 'Yes, Clear Everything'}
+                    </Button>
+                    <Button variant="secondary" onClick={() => setShowClearConfirm(false)}>Cancel</Button>
+                  </div>
+                </div>
+              )}
+              {clearMsg && <p className={`text-sm ${clearMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{clearMsg}</p>}
+            </div>
+          </Card>
         </section>
       </RoleGuard>
 

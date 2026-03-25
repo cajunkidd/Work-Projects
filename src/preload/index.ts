@@ -89,7 +89,8 @@ contextBridge.exposeInMainWorld('api', {
     uploadLogo: () => ipcRenderer.invoke('settings:uploadLogo'),
     pickDbFolder: () => ipcRenderer.invoke('settings:pickDbFolder'),
     extractColors: (imagePath: string) => ipcRenderer.invoke('settings:extractColors', imagePath),
-    testEmail: (toEmail: string) => ipcRenderer.invoke('settings:testEmail', toEmail)
+    testEmail: (toEmail: string) => ipcRenderer.invoke('settings:testEmail', toEmail),
+    clearAllData: () => ipcRenderer.invoke('settings:clearAllData')
   },
 
   // Gmail
