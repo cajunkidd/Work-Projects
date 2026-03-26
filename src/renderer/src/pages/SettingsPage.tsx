@@ -78,6 +78,10 @@ export default function SettingsPage() {
   const [documensoTesting, setDocumensoTesting] = useState(false)
   const [showApiKey, setShowApiKey] = useState(false)
 
+  // Demo data
+  const [demoLoading, setDemoLoading] = useState(false)
+  const [demoMsg, setDemoMsg] = useState('')
+
   const load = () => {
     window.api.settings.get().then((res) => {
       if (res.success && res.data) {
@@ -692,6 +696,50 @@ export default function SettingsPage() {
               </div>
             ))}
           </div>
+        </section>
+      </RoleGuard>
+
+      {/* ─── Demo Data ─── */}
+      <RoleGuard minRole="super_admin">
+        <section className="space-y-4">
+          <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Demo Data</h2>
+          <Card>
+            <div className="space-y-3">
+              <p className="text-slate-400 text-sm">
+                Load sample contracts, invoices, budgets, and other data for demonstration purposes.
+                This will replace all existing data.
+              </p>
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="danger"
+                  disabled={demoLoading}
+                  onClick={async () => {
+                    if (!confirm('This will replace ALL existing data with demo data. Continue?')) return
+                    setDemoLoading(true)
+                    setDemoMsg('')
+                    const res = await window.api.demo.seed()
+                    setDemoLoading(false)
+                    if (res.success) {
+                      setDemoMsg('Demo data loaded! Refreshing...')
+                      setTimeout(() => window.location.reload(), 1500)
+                    } else {
+                      setDemoMsg(`Error: ${res.error}`)
+                    }
+                  }}
+                >
+                  {demoLoading ? 'Loading...' : 'Load Demo Data'}
+                </Button>
+                {demoMsg && (
+                  <span className={`text-sm ${demoMsg.startsWith('Demo') ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {demoMsg}
+                  </span>
+                )}
+              </div>
+              <p className="text-slate-500 text-xs">
+                Login credentials: admin@company.com / demo123
+              </p>
+            </div>
+          </Card>
         </section>
       </RoleGuard>
 

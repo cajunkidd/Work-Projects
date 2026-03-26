@@ -107,6 +107,9 @@ declare global {
         list: (contract_id: number) => Promise<IpcResponse<ContractAllocation[]>>
         save: (contract_id: number, allocations: Omit<ContractAllocation, 'id' | 'created_at'>[]) => Promise<IpcResponse<void>>
       }
+      demo: {
+        seed: () => Promise<IpcResponse<void>>
+      }
     }
   }
 }

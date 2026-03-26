@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import path from 'path'
 import { pathToFileURL } from 'url'
-import { initDatabase, updateContractStatuses } from './database'
+import { initDatabase, updateContractStatuses, seedDemoData } from './database'
 import { registerUserHandlers } from './ipc/users'
 import { registerBudgetHandlers } from './ipc/budget'
 import { registerContractHandlers } from './ipc/contracts'
@@ -82,6 +82,16 @@ app.whenReady().then(() => {
   // IPC for getting upcoming renewals (used by renderer)
   ipcMain.handle('scheduler:upcomingRenewals', () => {
     return { success: true, data: getUpcomingRenewals() }
+  })
+
+  // Demo data seeding
+  ipcMain.handle('demo:seed', () => {
+    try {
+      seedDemoData()
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   })
 
   // Update contract statuses on startup

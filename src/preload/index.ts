@@ -128,6 +128,11 @@ contextBridge.exposeInMainWorld('api', {
     contractDetail: (payload: any) => ipcRenderer.invoke('exports:contractDetail', payload)
   },
 
+  // Demo data
+  demo: {
+    seed: () => ipcRenderer.invoke('demo:seed')
+  },
+
   // Contract Creation & E-Signature
   contractCreation: {
     saveTemplate: (payload: any) => ipcRenderer.invoke('contractCreation:saveTemplate', payload),
