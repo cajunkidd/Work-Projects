@@ -22,9 +22,13 @@ export function initDatabase(customPath?: string): void {
 
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
-  db.pragma('foreign_keys = ON')
 
+  // Run migrations with FK checks off and legacy alter table to prevent FK rewriting
+  db.pragma('foreign_keys = OFF')
+  db.pragma('legacy_alter_table = ON')
   runMigrations()
+  db.pragma('legacy_alter_table = OFF')
+  db.pragma('foreign_keys = ON')
 }
 
 export function switchDatabase(newPath: string): void {
@@ -385,23 +389,21 @@ export function seedDemoData(): void {
   const hash = bcrypt.hashSync('demo123', 10)
 
   db.transaction(() => {
-    // Clear existing data (order matters for foreign keys)
-    db.exec(`
-      DELETE FROM signing_requests;
-      DELETE FROM contract_templates;
-      DELETE FROM branch_assets;
-      DELETE FROM contract_allocations;
-      DELETE FROM vendor_notes;
-      DELETE FROM vendor_projects;
-      DELETE FROM invoices;
-      DELETE FROM competitor_offerings;
-      DELETE FROM renewal_history;
-      DELETE FROM contract_line_items;
-      DELETE FROM contracts;
-      DELETE FROM budget;
-      DELETE FROM users;
-      DELETE FROM departments;
-    `)
+    // Temporarily disable FK checks for clean slate
+    db.pragma('foreign_keys = OFF')
+
+    // Clear existing data
+    const tables = [
+      'signing_requests', 'contract_templates', 'branch_assets',
+      'contract_allocations', 'vendor_notes', 'vendor_projects',
+      'invoices', 'competitor_offerings', 'renewal_history',
+      'contract_line_items', 'contracts', 'budget', 'users', 'departments'
+    ]
+    for (const t of tables) {
+      db.exec(`DELETE FROM ${t};`)
+    }
+
+    db.pragma('foreign_keys = ON')
 
     // ── Departments ──
     db.exec(`
