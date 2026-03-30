@@ -23,7 +23,9 @@ import { useThemeStore } from '../store/themeStore'
 import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
-import type { BudgetSummary, Contract, Invoice } from '../../../shared/types'
+import DrillDownModal from '../components/dashboard/DrillDownModal'
+import { useDrillDown } from '../hooks/useDrillDown'
+import type { BudgetSummary, Contract, Invoice, VendorProject } from '../../../shared/types'
 
 const STATUS_COLORS = {
   active: '#10b981',
@@ -252,6 +254,8 @@ export default function DashboardPage() {
   const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([])
   const [spendTrend, setSpendTrend] = useState<{ month: string; amount: number }[]>([])
   const [projectCounts, setProjectCounts] = useState({ active: 0, on_hold: 0, completed: 0 })
+  const [projects, setProjects] = useState<VendorProject[]>([])
+  const drillDown = useDrillDown()
   const [trendChart, setTrendChart] = useState<'area' | 'bar' | 'line'>('area')
   const [statusChart, setStatusChart] = useState<'donut' | 'bar' | 'radial'>('donut')
   const year = new Date().getFullYear()
@@ -308,6 +312,7 @@ export default function DashboardPage() {
 
     window.api.projects.list().then((res) => {
       if (res.success && res.data) {
+        setProjects(res.data)
         const counts = { active: 0, on_hold: 0, completed: 0 }
         res.data.forEach((p: any) => {
           if (p.status in counts) counts[p.status as keyof typeof counts]++
@@ -358,7 +363,11 @@ export default function DashboardPage() {
       {/* Top row: Budget gauge + stats */}
       <div className="grid grid-cols-12 gap-4">
         {/* Budget gauge */}
-        <Card className="col-span-3 flex items-center justify-center py-4">
+        <Card className="col-span-3 flex items-center justify-center py-4" onClick={currentSummary ? () => drillDown.open({
+          type: 'budget',
+          title: `Budget Details — ${currentSummary.branch_name ?? currentSummary.department_name ?? 'Company'}`,
+          summary: currentSummary
+        }) : undefined}>
           {currentSummary ? (
             <BudgetGauge summary={currentSummary} />
           ) : (
@@ -369,24 +378,37 @@ export default function DashboardPage() {
         {/* Stats */}
         <div className="col-span-9 grid grid-cols-4 gap-4">
           {[
-            { label: 'Total Contracts', value: contracts.length, sub: 'all time' },
+            {
+              label: 'Total Contracts',
+              value: contracts.length,
+              sub: 'all time',
+              onClick: () => drillDown.open({ type: 'contracts', title: 'All Contracts', filter: () => true })
+            },
             {
               label: 'Active',
               value: contracts.filter((c) => c.status === 'active').length,
-              sub: 'contracts'
+              sub: 'contracts',
+              onClick: () => drillDown.open({ type: 'contracts', title: 'Active Contracts', filter: (c) => c.status === 'active' })
             },
             {
               label: 'Expiring Soon',
               value: contracts.filter((c) => c.status === 'expiring_soon').length,
-              sub: '≤120 days'
+              sub: '≤120 days',
+              onClick: () => drillDown.open({ type: 'contracts', title: 'Expiring Soon', filter: (c) => c.status === 'expiring_soon' })
             },
             {
               label: 'Annual Spend',
               value: fmt(contracts.reduce((s, c) => s + (c.annual_cost || 0), 0)),
-              sub: 'active contracts'
+              sub: 'active contracts',
+              onClick: () => drillDown.open({
+                type: 'contracts',
+                title: 'Contracts by Annual Spend',
+                filter: () => true,
+                sort: (a, b) => (b.annual_cost || 0) - (a.annual_cost || 0)
+              })
             }
           ].map((stat) => (
-            <Card key={stat.label}>
+            <Card key={stat.label} onClick={stat.onClick}>
               <p className="text-slate-400 text-xs mb-1">{stat.label}</p>
               <p className="text-white text-2xl font-bold">{stat.value}</p>
               <p className="text-slate-500 text-xs mt-0.5">{stat.sub}</p>
@@ -424,7 +446,16 @@ export default function DashboardPage() {
                 <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => [fmt(v), 'Spend']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-                <Area type="monotone" dataKey="amount" stroke={brandPrimary} fill="url(#spendGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="amount" stroke={brandPrimary} fill="url(#spendGrad)" strokeWidth={2} cursor="pointer" onClick={(data: any) => {
+                  if (data?.payload?.month) {
+                    const m = data.payload.month
+                    drillDown.open({
+                      type: 'contracts',
+                      title: `Spend for ${m}`,
+                      filter: (c) => c.start_date <= `${m}-31` && c.end_date >= `${m}-01`
+                    })
+                  }
+                }} />
               </AreaChart>
             ) : trendChart === 'bar' ? (
               <BarChart data={spendTrend}>
@@ -432,7 +463,16 @@ export default function DashboardPage() {
                 <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => [fmt(v), 'Spend']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-                <Bar dataKey="amount" fill={brandPrimary} radius={[3, 3, 0, 0]} />
+                <Bar dataKey="amount" fill={brandPrimary} radius={[3, 3, 0, 0]} cursor="pointer" onClick={(data: any) => {
+                  if (data?.month) {
+                    const m = data.month
+                    drillDown.open({
+                      type: 'contracts',
+                      title: `Spend for ${m}`,
+                      filter: (c) => c.start_date <= `${m}-31` && c.end_date >= `${m}-01`
+                    })
+                  }
+                }} />
               </BarChart>
             ) : (
               <LineChart data={spendTrend}>
@@ -440,7 +480,16 @@ export default function DashboardPage() {
                 <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
                 <YAxis tick={{ fill: '#94a3b8', fontSize: 11 }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} />
                 <Tooltip formatter={(v: number) => [fmt(v), 'Spend']} contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-                <Line type="monotone" dataKey="amount" stroke={brandPrimary} strokeWidth={2} dot={{ fill: brandPrimary, r: 3 }} />
+                <Line type="monotone" dataKey="amount" stroke={brandPrimary} strokeWidth={2} dot={{ fill: brandPrimary, r: 3 }} cursor="pointer" onClick={(data: any) => {
+                  if (data?.payload?.month) {
+                    const m = data.payload.month
+                    drillDown.open({
+                      type: 'contracts',
+                      title: `Spend for ${m}`,
+                      filter: (c) => c.start_date <= `${m}-31` && c.end_date >= `${m}-01`
+                    })
+                  }
+                }} />
               </LineChart>
             )}
           </ResponsiveContainer>
@@ -464,7 +513,12 @@ export default function DashboardPage() {
             <ResponsiveContainer width="100%" height={200}>
               {statusChart === 'donut' ? (
                 <PieChart>
-                  <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" label={({ value }) => `${value}`} labelLine={false}>
+                  <Pie data={statusCounts} cx="50%" cy="50%" innerRadius={55} outerRadius={80} dataKey="value" label={({ value }) => `${value}`} labelLine={false} cursor="pointer" onClick={(data: any) => {
+                    if (data?.name) {
+                      const status = data.name.replace(' ', '_')
+                      drillDown.open({ type: 'contracts', title: `${data.name} Contracts`, filter: (c) => c.status === status })
+                    }
+                  }}>
                     {statusCounts.map((entry, i) => (
                       <Cell key={i} fill={entry.fill} />
                     ))}
@@ -478,7 +532,12 @@ export default function DashboardPage() {
                   <XAxis type="number" tick={{ fill: '#94a3b8', fontSize: 11 }} allowDecimals={false} />
                   <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} width={80} />
                   <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
-                  <Bar dataKey="value" radius={[0, 3, 3, 0]}>
+                  <Bar dataKey="value" radius={[0, 3, 3, 0]} cursor="pointer" onClick={(data: any) => {
+                    if (data?.name) {
+                      const status = data.name.replace(' ', '_')
+                      drillDown.open({ type: 'contracts', title: `${data.name} Contracts`, filter: (c) => c.status === status })
+                    }
+                  }}>
                     {statusCounts.map((entry, i) => (
                       <Cell key={i} fill={entry.fill} />
                     ))}
@@ -492,6 +551,14 @@ export default function DashboardPage() {
                   outerRadius={90}
                   barSize={12}
                   data={statusCounts.map((s) => ({ ...s, value: s.value, fill: s.fill }))}
+                  onClick={(data: any) => {
+                    if (data?.activePayload?.[0]?.payload?.name) {
+                      const name = data.activePayload[0].payload.name
+                      const status = name.replace(' ', '_')
+                      drillDown.open({ type: 'contracts', title: `${name} Contracts`, filter: (c) => c.status === status })
+                    }
+                  }}
+                  className="[&_.recharts-sector]:cursor-pointer"
                 >
                   <RadialBar dataKey="value" cornerRadius={4} label={{ position: 'insideStart', fill: '#fff', fontSize: 10 }} />
                   <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #334155', borderRadius: 8 }} />
@@ -562,7 +629,7 @@ export default function DashboardPage() {
               {recentInvoices.map((inv) => {
                 const over = inv.amount > inv.budgeted_amount * 1.05
                 return (
-                  <div key={inv.id} className="py-1.5 border-b border-slate-800 last:border-0">
+                  <div key={inv.id} className="py-1.5 border-b border-slate-800 last:border-0 cursor-pointer hover:bg-slate-800/50 rounded px-2 -mx-2 transition-colors" onClick={() => drillDown.open({ type: 'invoices', title: 'Recent Invoices' })}>
                     <p className="text-white text-xs font-medium truncate">{inv.subject}</p>
                     <div className="flex items-center justify-between mt-0.5">
                       <span className="text-slate-400 text-xs">{inv.received_date}</span>
@@ -580,11 +647,11 @@ export default function DashboardPage() {
           <p className="text-white font-semibold mb-3">Vendor Projects</p>
           <div className="space-y-3">
             {[
-              { label: 'Active', count: projectCounts.active, color: '#10b981' },
-              { label: 'On Hold', count: projectCounts.on_hold, color: '#f59e0b' },
-              { label: 'Completed', count: projectCounts.completed, color: '#6b7280' }
+              { label: 'Active', count: projectCounts.active, color: '#10b981', status: 'active' },
+              { label: 'On Hold', count: projectCounts.on_hold, color: '#f59e0b', status: 'on_hold' },
+              { label: 'Completed', count: projectCounts.completed, color: '#6b7280', status: 'completed' }
             ].map((s) => (
-              <div key={s.label} className="flex items-center justify-between">
+              <div key={s.label} className="flex items-center justify-between cursor-pointer hover:bg-slate-800/50 rounded px-2 py-1 -mx-2 transition-colors" onClick={() => drillDown.open({ type: 'projects', title: `${s.label} Projects`, statusFilter: s.status })}>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full" style={{ background: s.color }} />
                   <span className="text-slate-300 text-sm">{s.label}</span>
@@ -595,6 +662,15 @@ export default function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      <DrillDownModal
+        state={drillDown.state}
+        onClose={drillDown.close}
+        contracts={contracts}
+        invoices={recentInvoices}
+        projects={projects}
+        onNavigate={(path) => navigate(path)}
+      />
     </div>
   )
 }
