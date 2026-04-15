@@ -7,9 +7,21 @@ const REMINDER_DAYS = [120, 90, 60, 30]
 const NOTIFIED_KEY_PREFIX = 'reminder_sent_'
 
 export function startScheduler(): void {
-  // Run once on startup and then daily at 9 AM
-  checkRenewals()
-  cron.schedule('0 9 * * *', checkRenewals)
+  // Run once on startup and then daily at 9 AM.
+  // Wrap in try/catch so a scheduler failure can never abort app startup
+  // (this callback runs inside app.whenReady().then, which skips createWindow if it throws).
+  try {
+    checkRenewals()
+  } catch (err) {
+    console.error('[scheduler] initial checkRenewals failed:', err)
+  }
+  cron.schedule('0 9 * * *', () => {
+    try {
+      checkRenewals()
+    } catch (err) {
+      console.error('[scheduler] scheduled checkRenewals failed:', err)
+    }
+  })
 }
 
 function checkRenewals(): void {
@@ -47,7 +59,7 @@ function checkRenewals(): void {
       // Mark as sent
       db.prepare(
         "INSERT INTO app_settings (key, value) VALUES (?, datetime('now')) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
-      ).run(notifyKey, '1')
+      ).run(notifyKey)
     }
   }
 }
