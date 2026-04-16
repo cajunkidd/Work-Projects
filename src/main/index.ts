@@ -2,6 +2,8 @@ import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import path from 'path'
 import { pathToFileURL } from 'url'
 import { initDatabase, getDb, updateContractStatuses } from './database'
+import { readLocalConfig } from './localConfig'
+import { checkForUpdates, registerUpdaterHandlers } from './autoUpdater'
 import { registerUserHandlers } from './ipc/users'
 import { registerBudgetHandlers } from './ipc/budget'
 import { registerContractHandlers } from './ipc/contracts'
@@ -68,8 +70,10 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(filePath).toString())
   })
 
-  // Init database (will use userData path by default)
-  initDatabase()
+  // Init database — use the persisted network path if one was configured,
+  // otherwise fall back to the local userData path.
+  const localConfig = readLocalConfig()
+  initDatabase(localConfig.db_network_path || undefined)
 
   // Register all IPC handlers
   registerUserHandlers()
@@ -92,6 +96,7 @@ app.whenReady().then(() => {
   registerAiHandlers()
   registerClauseLibraryHandlers()
   registerAuditHandlers()
+  registerUpdaterHandlers()
 
   // IPC for getting upcoming renewals (used by renderer)
   ipcMain.handle('scheduler:upcomingRenewals', () => {
@@ -122,6 +127,9 @@ app.whenReady().then(() => {
   startScheduler()
 
   createWindow()
+
+  // Check for app updates from the configured releases folder (non-blocking).
+  checkForUpdates()
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()

@@ -208,6 +208,13 @@ contextBridge.exposeInMainWorld('api', {
     email: (payload: any) => ipcRenderer.invoke('reports:email', payload)
   },
 
+  // Auto-updater
+  updater: {
+    getReleasesPath: () => ipcRenderer.invoke('updater:getReleasesPath'),
+    setReleasesPath: () => ipcRenderer.invoke('updater:setReleasesPath'),
+    checkNow: () => ipcRenderer.invoke('updater:checkNow')
+  },
+
   // Contract Creation & E-Signature
   contractCreation: {
     saveTemplate: (payload: any) => ipcRenderer.invoke('contractCreation:saveTemplate', payload),
