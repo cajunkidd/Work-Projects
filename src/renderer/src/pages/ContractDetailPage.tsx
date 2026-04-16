@@ -17,8 +17,9 @@ import type {
   ContractAllocation
 } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
+import ObligationsTab from '../components/contracts/ObligationsTab'
 
-const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Notes', 'Projects', 'Competitors']
+const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Obligations', 'Notes', 'Projects', 'Competitors']
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -456,6 +457,8 @@ export default function ContractDetailPage() {
           </div>
         </div>
       )}
+
+      {activeTab === 'Obligations' && <ObligationsTab contractId={contractId} />}
 
       {activeTab === 'Notes' && (
         <div className="space-y-4">

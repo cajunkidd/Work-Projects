@@ -85,6 +85,16 @@ contextBridge.exposeInMainWorld('api', {
     delete: (id: number) => ipcRenderer.invoke('notes:delete', id)
   },
 
+  // Obligations
+  obligations: {
+    list: (contract_id: number) => ipcRenderer.invoke('obligations:list', contract_id),
+    create: (payload: any) => ipcRenderer.invoke('obligations:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('obligations:update', payload),
+    complete: (id: number) => ipcRenderer.invoke('obligations:complete', id),
+    delete: (id: number) => ipcRenderer.invoke('obligations:delete', id),
+    upcoming: (opts?: any) => ipcRenderer.invoke('obligations:upcoming', opts)
+  },
+
   // Settings & Branding
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
