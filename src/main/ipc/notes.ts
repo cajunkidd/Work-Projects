@@ -1,5 +1,5 @@
 import { ipcMain } from 'electron'
-import { getDb } from '../database'
+import { getDb, refreshContractFts } from '../database'
 import type { IpcResponse, VendorNote } from '../../shared/types'
 
 export function registerNoteHandlers(): void {
@@ -33,6 +33,7 @@ export function registerNoteHandlers(): void {
         const row = db
           .prepare('SELECT * FROM vendor_notes WHERE id = ?')
           .get(result.lastInsertRowid) as VendorNote
+        refreshContractFts(payload.contract_id)
         return { success: true, data: row }
       } catch (err: any) {
         return { success: false, error: err.message }
@@ -42,7 +43,12 @@ export function registerNoteHandlers(): void {
 
   ipcMain.handle('notes:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
     try {
-      getDb().prepare('DELETE FROM vendor_notes WHERE id = ?').run(id)
+      const db = getDb()
+      const row = db.prepare('SELECT contract_id FROM vendor_notes WHERE id = ?').get(id) as
+        | { contract_id: number }
+        | undefined
+      db.prepare('DELETE FROM vendor_notes WHERE id = ?').run(id)
+      if (row) refreshContractFts(row.contract_id)
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }

@@ -170,6 +170,11 @@ function runMigrations(): void {
   runV4Migration()
   runV5Migration()
   runV6Migration()
+  runV7Migration()
+  runV8Migration()
+  runV9Migration()
+  runV10Migration()
+  runV11Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -398,6 +403,167 @@ function runV6Migration(): void {
   db.pragma('user_version = 6')
 }
 
+// V7: Full-text search over contract content (vendor_name, poc, notes, extracted PDF text)
+function runV7Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 7) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS contract_extracted_text (
+      contract_id INTEGER PRIMARY KEY REFERENCES contracts(id) ON DELETE CASCADE,
+      text TEXT NOT NULL DEFAULT '',
+      extracted_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE VIRTUAL TABLE IF NOT EXISTS contracts_fts USING fts5(
+      vendor_name,
+      poc_name,
+      poc_email,
+      notes,
+      extracted_text,
+      tokenize='porter'
+    );
+  `)
+
+  db.pragma('user_version = 7')
+}
+
+// V8: Contract obligations (SLAs, payment milestones, reporting duties, etc.)
+function runV8Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 8) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS contract_obligations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      due_date TEXT NOT NULL,
+      responsible_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','completed','overdue','cancelled')),
+      recurrence TEXT NOT NULL DEFAULT 'none'
+        CHECK(recurrence IN ('none','monthly','quarterly','annual')),
+      completed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_obligations_due_date ON contract_obligations(due_date);
+    CREATE INDEX IF NOT EXISTS idx_obligations_contract ON contract_obligations(contract_id);
+    CREATE INDEX IF NOT EXISTS idx_obligations_status ON contract_obligations(status);
+  `)
+
+  db.pragma('user_version = 8')
+}
+
+// V9: Audit log of user-driven mutations across key entities
+function runV9Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 9) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audit_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      user_name TEXT NOT NULL DEFAULT 'system',
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      action TEXT NOT NULL CHECK(action IN ('create','update','delete')),
+      diff_json TEXT NOT NULL DEFAULT '{}',
+      timestamp TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_audit_entity ON audit_log(entity_type, entity_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
+    CREATE INDEX IF NOT EXISTS idx_audit_user ON audit_log(user_id);
+  `)
+
+  db.pragma('user_version = 9')
+}
+
+// V10: Custom fields + tags attachable to contracts
+function runV10Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 10) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS custom_fields (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      entity_type TEXT NOT NULL DEFAULT 'contract' CHECK(entity_type IN ('contract')),
+      name TEXT NOT NULL,
+      field_type TEXT NOT NULL CHECK(field_type IN ('text','number','date','select','boolean')),
+      options_json TEXT NOT NULL DEFAULT '[]',
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(entity_type, name)
+    );
+
+    CREATE TABLE IF NOT EXISTS custom_field_values (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      field_id INTEGER NOT NULL REFERENCES custom_fields(id) ON DELETE CASCADE,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      value TEXT NOT NULL DEFAULT '',
+      UNIQUE(field_id, entity_type, entity_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_cfv_entity ON custom_field_values(entity_type, entity_id);
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      color TEXT NOT NULL DEFAULT '#6366f1',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS entity_tags (
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      entity_type TEXT NOT NULL,
+      entity_id INTEGER NOT NULL,
+      PRIMARY KEY (tag_id, entity_type, entity_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_entity_tags ON entity_tags(entity_type, entity_id);
+  `)
+
+  db.pragma('user_version = 10')
+}
+
+// V11: Approval workflow — requests + steps with configurable approver ordering
+function runV11Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 11) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS approval_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      requested_by_name TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','approved','rejected','cancelled')),
+      note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      resolved_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_approval_contract ON approval_requests(contract_id);
+    CREATE INDEX IF NOT EXISTS idx_approval_status ON approval_requests(status);
+
+    CREATE TABLE IF NOT EXISTS approval_steps (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      request_id INTEGER NOT NULL REFERENCES approval_requests(id) ON DELETE CASCADE,
+      approver_user_id INTEGER NOT NULL REFERENCES users(id),
+      step_order INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(status IN ('pending','approved','rejected','skipped')),
+      comment TEXT NOT NULL DEFAULT '',
+      acted_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_approval_steps_request ON approval_steps(request_id);
+  `)
+
+  db.pragma('user_version = 11')
+}
+
 export function updateContractStatuses(): void {
   db.exec(`
     UPDATE contracts SET status = 'expired'
@@ -407,4 +573,84 @@ export function updateContractStatuses(): void {
     WHERE date(end_date) BETWEEN date('now') AND date('now', '+120 days')
     AND status = 'active';
   `)
+}
+
+// ─── Full-text search helpers ───────────────────────────────────────────────
+// The contracts_fts virtual table is keyed by rowid = contracts.id. We
+// maintain it manually (no triggers) so the sync points are explicit and
+// we can include derived fields (concatenated vendor notes, extracted PDF
+// text) that don't live directly on contracts.
+
+function collectContractFtsFields(
+  contractId: number
+): { vendor_name: string; poc_name: string; poc_email: string; notes: string; extracted_text: string } | null {
+  const row = db
+    .prepare(
+      'SELECT vendor_name, poc_name, poc_email FROM contracts WHERE id = ?'
+    )
+    .get(contractId) as
+    | { vendor_name: string; poc_name: string; poc_email: string }
+    | undefined
+  if (!row) return null
+
+  const notesRow = db
+    .prepare(
+      `SELECT COALESCE(GROUP_CONCAT(note, ' '), '') as notes
+       FROM vendor_notes WHERE contract_id = ?`
+    )
+    .get(contractId) as { notes: string }
+
+  const textRow = db
+    .prepare('SELECT text FROM contract_extracted_text WHERE contract_id = ?')
+    .get(contractId) as { text: string } | undefined
+
+  return {
+    vendor_name: row.vendor_name,
+    poc_name: row.poc_name,
+    poc_email: row.poc_email,
+    notes: notesRow.notes,
+    extracted_text: textRow?.text ?? ''
+  }
+}
+
+export function refreshContractFts(contractId: number): void {
+  const fields = collectContractFtsFields(contractId)
+  db.prepare('DELETE FROM contracts_fts WHERE rowid = ?').run(contractId)
+  if (!fields) return
+  db.prepare(
+    `INSERT INTO contracts_fts (rowid, vendor_name, poc_name, poc_email, notes, extracted_text)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(
+    contractId,
+    fields.vendor_name,
+    fields.poc_name,
+    fields.poc_email,
+    fields.notes,
+    fields.extracted_text
+  )
+}
+
+export function removeContractFromFts(contractId: number): void {
+  db.prepare('DELETE FROM contracts_fts WHERE rowid = ?').run(contractId)
+  db.prepare('DELETE FROM contract_extracted_text WHERE contract_id = ?').run(contractId)
+}
+
+export function setContractExtractedText(contractId: number, text: string): void {
+  db.prepare(
+    `INSERT INTO contract_extracted_text (contract_id, text, extracted_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(contract_id) DO UPDATE SET
+       text = excluded.text,
+       extracted_at = excluded.extracted_at`
+  ).run(contractId, text)
+  refreshContractFts(contractId)
+}
+
+// One-time rebuild for existing contracts after the V7 migration runs
+// (so search works on pre-existing data without requiring manual re-upload).
+export function rebuildContractFtsIfEmpty(): void {
+  const count = db.prepare('SELECT COUNT(*) as c FROM contracts_fts').get() as { c: number }
+  if (count.c > 0) return
+  const ids = db.prepare('SELECT id FROM contracts').all() as { id: number }[]
+  for (const { id } of ids) refreshContractFts(id)
 }

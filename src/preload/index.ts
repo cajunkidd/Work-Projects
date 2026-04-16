@@ -41,7 +41,9 @@ contextBridge.exposeInMainWorld('api', {
     delete: (id: number) => ipcRenderer.invoke('contracts:delete', id),
     uploadFile: () => ipcRenderer.invoke('contracts:uploadFile'),
     parseImport: () => ipcRenderer.invoke('contracts:parseImport'),
-    bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows)
+    bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows),
+    searchFullText: (opts: any) => ipcRenderer.invoke('contracts:searchFullText', opts),
+    reextractText: (id: number) => ipcRenderer.invoke('contracts:reextractText', id)
   },
   lineItems: {
     list: (contract_id: number) => ipcRenderer.invoke('lineItems:list', contract_id),

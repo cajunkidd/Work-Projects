@@ -48,7 +48,15 @@ const emptyFilters = {
 }
 
 // Reusable contract card list
-function ContractList({ contracts, onNavigate }: { contracts: Contract[]; onNavigate: (id: number) => void }) {
+function ContractList({
+  contracts,
+  onNavigate,
+  snippets
+}: {
+  contracts: Contract[]
+  onNavigate: (id: number) => void
+  snippets?: Record<number, string>
+}) {
   if (contracts.length === 0) {
     return (
       <Card className="text-center py-12">
@@ -83,6 +91,12 @@ function ContractList({ contracts, onNavigate }: { contracts: Contract[]; onNavi
                 <span>End: <span className="text-slate-300">{c.end_date}</span></span>
                 <span>POC: <span className="text-slate-300">{c.poc_name}</span></span>
               </div>
+              {snippets?.[c.id] && (
+                <p
+                  className="text-xs text-slate-400 mt-2 italic line-clamp-2 [&_mark]:bg-amber-500/30 [&_mark]:text-amber-100 [&_mark]:rounded [&_mark]:px-0.5"
+                  dangerouslySetInnerHTML={{ __html: snippets[c.id] }}
+                />
+              )}
             </div>
             <div className="text-right flex-shrink-0">
               <p className="text-white font-bold text-lg">{fmt(c.annual_cost)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
@@ -105,6 +119,10 @@ export default function ContractsPage() {
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'list' | 'search' | 'create'>('list')
   const [filters, setFilters] = useState(emptyFilters)
+  // Full-text search state (Search tab only)
+  const [ftsQuery, setFtsQuery] = useState('')
+  const [ftsResults, setFtsResults] = useState<(Contract & { snippet: string })[] | null>(null)
+  const [ftsLoading, setFtsLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [exportMsg, setExportMsg] = useState('')
@@ -146,6 +164,26 @@ export default function ContractsPage() {
   }, [])
 
   useEffect(() => { load() }, [selectedDeptId, search, user])
+
+  const runFullTextSearch = async (query: string) => {
+    if (!user) return
+    const q = query.trim()
+    if (!q) {
+      setFtsResults(null)
+      return
+    }
+    setFtsLoading(true)
+    const opts: any = { query: q }
+    if (user.role !== 'super_admin') {
+      opts.role = user.role
+      opts.allowed_department_ids = user.department_ids
+      opts.allowed_branch_ids = user.branch_ids
+    }
+    const res = await window.api.contracts.searchFullText(opts)
+    setFtsLoading(false)
+    if (res.success && res.data) setFtsResults(res.data)
+    else setFtsResults([])
+  }
 
   const handleUpload = async () => {
     const res = await window.api.contracts.uploadFile()
@@ -322,6 +360,43 @@ export default function ContractsPage() {
                 >
                   Clear all
                 </button>
+              )}
+            </div>
+
+            {/* Full-text content search (PDF text + notes) */}
+            <div>
+              <label className="text-slate-400 text-xs font-medium block mb-1.5">
+                Content Search
+                <span className="text-slate-500 font-normal ml-1">(inside PDFs &amp; notes)</span>
+              </label>
+              <div className="flex gap-2">
+                <input
+                  className={inputCls}
+                  placeholder='e.g. "auto-renewal" or "termination"'
+                  value={ftsQuery}
+                  onChange={(e) => setFtsQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      runFullTextSearch(ftsQuery)
+                    }
+                  }}
+                />
+                {ftsResults !== null && (
+                  <button
+                    onClick={() => { setFtsQuery(''); setFtsResults(null) }}
+                    className="text-xs text-slate-400 hover:text-white px-2"
+                    title="Clear content search"
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+              {ftsLoading && <p className="text-slate-500 text-xs mt-1">Searching…</p>}
+              {ftsResults !== null && !ftsLoading && (
+                <p className="text-slate-500 text-xs mt-1">
+                  Showing content-search results ({ftsResults.length}). Filters below are disabled.
+                </p>
               )}
             </div>
 
@@ -505,24 +580,47 @@ export default function ContractsPage() {
 
           {/* Results */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <p className="text-slate-400 text-sm">
-                <span className="text-white font-medium">{filteredContracts.length}</span> result{filteredContracts.length !== 1 ? 's' : ''}
-                {hasActiveFilters && <span className="text-slate-500"> (filtered from {contracts.length})</span>}
-              </p>
-            </div>
-            {filteredContracts.length === 0 ? (
-              <Card className="text-center py-12">
-                <p className="text-slate-400">No contracts match your filters.</p>
-                <button
-                  onClick={() => setFilters(emptyFilters)}
-                  className="text-sm mt-2 text-slate-500 hover:text-white transition-colors"
-                >
-                  Clear filters
-                </button>
-              </Card>
+            {ftsResults !== null ? (
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-slate-400 text-sm">
+                    <span className="text-white font-medium">{ftsResults.length}</span> content match{ftsResults.length !== 1 ? 'es' : ''} for "{ftsQuery}"
+                  </p>
+                </div>
+                {ftsResults.length === 0 ? (
+                  <Card className="text-center py-12">
+                    <p className="text-slate-400">No contracts contain "{ftsQuery}".</p>
+                  </Card>
+                ) : (
+                  <ContractList
+                    contracts={ftsResults}
+                    snippets={Object.fromEntries(ftsResults.map((r) => [r.id, r.snippet]))}
+                    onNavigate={(id) => navigate(`/contracts/${id}`)}
+                  />
+                )}
+              </>
             ) : (
-              <ContractList contracts={filteredContracts} onNavigate={(id) => navigate(`/contracts/${id}`)} />
+              <>
+                <div className="flex items-center justify-between">
+                  <p className="text-slate-400 text-sm">
+                    <span className="text-white font-medium">{filteredContracts.length}</span> result{filteredContracts.length !== 1 ? 's' : ''}
+                    {hasActiveFilters && <span className="text-slate-500"> (filtered from {contracts.length})</span>}
+                  </p>
+                </div>
+                {filteredContracts.length === 0 ? (
+                  <Card className="text-center py-12">
+                    <p className="text-slate-400">No contracts match your filters.</p>
+                    <button
+                      onClick={() => setFilters(emptyFilters)}
+                      className="text-sm mt-2 text-slate-500 hover:text-white transition-colors"
+                    >
+                      Clear filters
+                    </button>
+                  </Card>
+                ) : (
+                  <ContractList contracts={filteredContracts} onNavigate={(id) => navigate(`/contracts/${id}`)} />
+                )}
+              </>
             )}
           </div>
         </div>
