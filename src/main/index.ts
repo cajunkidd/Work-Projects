@@ -17,6 +17,7 @@ import { registerExportHandlers } from './ipc/exports'
 import { registerContractCreationHandlers } from './ipc/contractCreation'
 import { registerReportHandlers } from './ipc/reports'
 import { registerObligationHandlers } from './ipc/obligations'
+import { registerCustomFieldHandlers } from './ipc/customFields'
 import { registerAuditHandlers } from './audit'
 import { startScheduler, getUpcomingRenewals } from './scheduler'
 
@@ -83,6 +84,7 @@ app.whenReady().then(() => {
   registerContractCreationHandlers()
   registerReportHandlers()
   registerObligationHandlers()
+  registerCustomFieldHandlers()
   registerAuditHandlers()
 
   // IPC for getting upcoming renewals (used by renderer)

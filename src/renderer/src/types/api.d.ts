@@ -69,6 +69,22 @@ declare global {
         entity: (payload: { entity_type: string; entity_id: number; limit?: number }) => Promise<IpcResponse<any[]>>
         recent: (limit?: number) => Promise<IpcResponse<any[]>>
       }
+      customFields: {
+        list: (entity_type?: string) => Promise<IpcResponse<any[]>>
+        create: (payload: any) => Promise<IpcResponse<any>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+        values: (payload: any) => Promise<IpcResponse<any[]>>
+        setValue: (payload: any) => Promise<IpcResponse<void>>
+      }
+      tags: {
+        list: () => Promise<IpcResponse<any[]>>
+        create: (payload: any) => Promise<IpcResponse<any>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+        forEntity: (payload: any) => Promise<IpcResponse<any[]>>
+        attach: (payload: any) => Promise<IpcResponse<void>>
+        detach: (payload: any) => Promise<IpcResponse<void>>
+      }
       lineItems: {
         list: (contract_id: number) => Promise<IpcResponse<ContractLineItem[]>>
         upsert: (items: ContractLineItem[]) => Promise<IpcResponse<void>>

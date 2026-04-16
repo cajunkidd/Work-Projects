@@ -102,6 +102,24 @@ contextBridge.exposeInMainWorld('api', {
     recent: (limit?: number) => ipcRenderer.invoke('audit:recent', limit)
   },
 
+  // Custom fields + tags
+  customFields: {
+    list: (entity_type?: string) => ipcRenderer.invoke('customFields:list', entity_type),
+    create: (payload: any) => ipcRenderer.invoke('customFields:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('customFields:update', payload),
+    delete: (id: number) => ipcRenderer.invoke('customFields:delete', id),
+    values: (payload: any) => ipcRenderer.invoke('customFields:values', payload),
+    setValue: (payload: any) => ipcRenderer.invoke('customFields:setValue', payload)
+  },
+  tags: {
+    list: () => ipcRenderer.invoke('tags:list'),
+    create: (payload: any) => ipcRenderer.invoke('tags:create', payload),
+    delete: (id: number) => ipcRenderer.invoke('tags:delete', id),
+    forEntity: (payload: any) => ipcRenderer.invoke('tags:forEntity', payload),
+    attach: (payload: any) => ipcRenderer.invoke('tags:attach', payload),
+    detach: (payload: any) => ipcRenderer.invoke('tags:detach', payload)
+  },
+
   // Settings & Branding
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),
