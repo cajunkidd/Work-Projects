@@ -10,6 +10,7 @@ import RoleGuard from '../components/layout/RoleGuard'
 import Badge from '../components/ui/Badge'
 import CustomFieldsSection from '../components/settings/CustomFieldsSection'
 import AiSettingsSection from '../components/settings/AiSettingsSection'
+import ClauseLibrarySection from '../components/settings/ClauseLibrarySection'
 import type { Department, Branch, User } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -698,6 +699,11 @@ export default function SettingsPage() {
       {/* ─── AI ─── */}
       <RoleGuard minRole="super_admin">
         <AiSettingsSection />
+      </RoleGuard>
+
+      {/* ─── Clause Library ─── */}
+      <RoleGuard minRole="super_admin">
+        <ClauseLibrarySection />
       </RoleGuard>
 
       {/* ─── Custom Fields & Tags ─── */}
