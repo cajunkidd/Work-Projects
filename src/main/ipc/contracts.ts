@@ -191,8 +191,8 @@ export function registerContractHandlers(): void {
           .prepare(
             `INSERT INTO contracts
              (vendor_name, status, start_date, end_date, monthly_cost, annual_cost, total_cost,
-              poc_name, poc_email, poc_phone, department_id, branch_id, file_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              poc_name, poc_email, poc_phone, department_id, branch_id, file_path, currency)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.vendor_name,
@@ -207,7 +207,8 @@ export function registerContractHandlers(): void {
             payload.poc_phone,
             payload.department_id ?? null,
             payload.branch_id ?? null,
-            payload.file_path || null
+            payload.file_path || null,
+            payload.currency ?? 'USD'
           )
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')

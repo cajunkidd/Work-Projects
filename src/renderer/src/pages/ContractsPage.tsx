@@ -9,6 +9,7 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
+import { fmt } from '../utils/format'
 import type { Contract, Department, Branch } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 import ImportContractsModal from '../components/contracts/ImportContractsModal'
@@ -18,9 +19,7 @@ function statusVariant(s: string) {
   return s === 'active' ? 'success' : s === 'expiring_soon' ? 'warning' : s === 'expired' ? 'danger' : 'neutral'
 }
 
-function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-}
+// fmt imported from ../utils/format
 
 const emptyForm = {
   vendor_name: '', status: 'active', start_date: '', end_date: '',
@@ -29,8 +28,17 @@ const emptyForm = {
   scope: 'department' as 'department' | 'branch',
   department_id: '',
   branch_id: '',
-  file_path: ''
+  file_path: '',
+  currency: 'USD'
 }
+
+const CURRENCIES = [
+  { value: 'USD', label: 'USD ($)' },
+  { value: 'EUR', label: 'EUR (\u20AC)' },
+  { value: 'GBP', label: 'GBP (\u00A3)' },
+  { value: 'CAD', label: 'CAD (C$)' },
+  { value: 'MXN', label: 'MXN (Mex$)' }
+]
 
 const emptyFilters = {
   vendor: '',
@@ -99,8 +107,8 @@ function ContractList({
               )}
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-white font-bold text-lg">{fmt(c.annual_cost)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
-              <p className="text-slate-400 text-sm">{fmt(c.monthly_cost)}/mo</p>
+              <p className="text-white font-bold text-lg">{fmt(c.annual_cost, c.currency)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
+              <p className="text-slate-400 text-sm">{fmt(c.monthly_cost, c.currency)}/mo</p>
             </div>
           </div>
         </Card>
@@ -209,7 +217,8 @@ export default function ContractsPage() {
       poc_phone: form.poc_phone,
       department_id: form.scope === 'department' && form.department_id ? parseInt(form.department_id) : null,
       branch_id: form.scope === 'branch' && form.branch_id ? parseInt(form.branch_id) : null,
-      file_path: form.file_path || null
+      file_path: form.file_path || null,
+      currency: form.currency || 'USD'
     }
     const res = await window.api.contracts.create(payload)
     if (res.success && res.data && needsAllocation && allocations.length > 0) {
@@ -720,12 +729,18 @@ export default function ContractsPage() {
               </div>
             )
           })()}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Input label="Start Date" type="date" value={form.start_date} onChange={(e) => f('start_date', e.target.value)} required />
             <Input label="End Date" type="date" value={form.end_date} onChange={(e) => f('end_date', e.target.value)} required />
+            <Select
+              label="Currency"
+              value={form.currency}
+              onChange={(e) => f('currency', e.target.value)}
+              options={CURRENCIES}
+            />
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Monthly Cost ($)" type="number" min="0" step="0.01" value={form.monthly_cost}
+            <Input label="Monthly Cost" type="number" min="0" step="0.01" value={form.monthly_cost}
               onChange={(e) => {
                 f('monthly_cost', e.target.value)
                 f('annual_cost', String(parseFloat(e.target.value) * 12 || 0))

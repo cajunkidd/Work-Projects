@@ -176,6 +176,8 @@ function runMigrations(): void {
   runV10Migration()
   runV11Migration()
   runV12Migration()
+  runV13Migration()
+  runV14Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -584,6 +586,33 @@ function runV12Migration(): void {
   `)
 
   db.pragma('user_version = 12')
+}
+
+// V13: Multi-currency — add optional currency column to contracts
+function runV13Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 13) return
+  db.exec(`ALTER TABLE contracts ADD COLUMN currency TEXT NOT NULL DEFAULT 'USD';`)
+  db.pragma('user_version = 13')
+}
+
+// V14: Savings log — tracks cost reductions from renewals
+function runV14Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 14) return
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS savings_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      renewal_id INTEGER REFERENCES renewal_history(id) ON DELETE SET NULL,
+      renewal_date TEXT NOT NULL,
+      amount REAL NOT NULL,
+      fiscal_year INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_savings_log_fy ON savings_log(fiscal_year);
+  `)
+  db.pragma('user_version = 14')
 }
 
 export function updateContractStatuses(): void {
