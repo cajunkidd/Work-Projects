@@ -114,10 +114,12 @@ contextBridge.exposeInMainWorld('api', {
   tags: {
     list: () => ipcRenderer.invoke('tags:list'),
     create: (payload: any) => ipcRenderer.invoke('tags:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('tags:update', payload),
     delete: (id: number) => ipcRenderer.invoke('tags:delete', id),
     forEntity: (payload: any) => ipcRenderer.invoke('tags:forEntity', payload),
     attach: (payload: any) => ipcRenderer.invoke('tags:attach', payload),
-    detach: (payload: any) => ipcRenderer.invoke('tags:detach', payload)
+    detach: (payload: any) => ipcRenderer.invoke('tags:detach', payload),
+    bulkAttach: (payload: any) => ipcRenderer.invoke('tags:bulkAttach', payload)
   },
 
   // Approval workflow

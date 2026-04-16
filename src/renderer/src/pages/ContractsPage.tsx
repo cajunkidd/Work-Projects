@@ -53,6 +53,13 @@ const emptyFilters = {
   department_id: '',
   branch_id: '',
   renewalWithin: '',
+  tag_ids: [] as number[],
+}
+
+interface TagItem {
+  id: number
+  name: string
+  color: string
 }
 
 // Reusable contract card list
@@ -131,6 +138,7 @@ export default function ContractsPage() {
   const [ftsQuery, setFtsQuery] = useState('')
   const [ftsResults, setFtsResults] = useState<(Contract & { snippet: string })[] | null>(null)
   const [ftsLoading, setFtsLoading] = useState(false)
+  const [allTags, setAllTags] = useState<TagItem[]>([])
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [exportMsg, setExportMsg] = useState('')
@@ -144,6 +152,7 @@ export default function ContractsPage() {
     if (!user) return
     const opts: any = { search: search || undefined }
 
+    if (filters.tag_ids && filters.tag_ids.length > 0) opts.tag_ids = filters.tag_ids
     if (user.role === 'super_admin') {
       if (selectedDeptId) opts.department_id = selectedDeptId
     } else {
@@ -169,9 +178,12 @@ export default function ContractsPage() {
     window.api.branches.list().then((res) => {
       if (res.success && res.data) setBranches(res.data)
     })
+    window.api.tags.list().then((res: any) => {
+      if (res.success && res.data) setAllTags(res.data)
+    })
   }, [])
 
-  useEffect(() => { load() }, [selectedDeptId, search, user])
+  useEffect(() => { load() }, [selectedDeptId, search, user, filters.tag_ids])
 
   const runFullTextSearch = async (query: string) => {
     if (!user) return
@@ -299,7 +311,8 @@ export default function ContractsPage() {
 
   const hasActiveFilters = filters.vendor || filters.pocName || filters.status.length > 0 ||
     filters.costOp !== 'any' || filters.startFrom || filters.startTo ||
-    filters.endFrom || filters.endTo || filters.department_id || filters.branch_id || filters.renewalWithin
+    filters.endFrom || filters.endTo || filters.department_id || filters.branch_id ||
+    filters.renewalWithin || filters.tag_ids.length > 0
 
   const inputCls = 'bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none w-full placeholder-slate-500'
 
@@ -585,6 +598,42 @@ export default function ContractsPage() {
                 <span className="text-slate-400 text-sm flex-shrink-0">days</span>
               </div>
             </div>
+
+            {/* Filter by tags */}
+            {allTags.length > 0 && (
+              <div>
+                <label className="text-slate-400 text-xs font-medium block mb-1.5">Tags</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {allTags.map((t) => {
+                    const selected = filters.tag_ids.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() =>
+                          setFilter(
+                            'tag_ids',
+                            selected
+                              ? filters.tag_ids.filter((x: number) => x !== t.id)
+                              : [...filters.tag_ids, t.id]
+                          )
+                        }
+                        className={`text-xs px-2 py-1 rounded-full font-medium border transition-colors ${
+                          selected ? 'ring-2 ring-white/40' : 'opacity-60 hover:opacity-100'
+                        }`}
+                        style={{
+                          background: t.color + '33',
+                          color: t.color,
+                          borderColor: t.color + '66'
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Results */}

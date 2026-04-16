@@ -85,6 +85,7 @@ export function registerContractHandlers(): void {
         department_id?: number
         branch_id?: number
         search?: string
+        tag_ids?: number[]
         // role-based filtering
         role?: string
         allowed_department_ids?: number[]
@@ -146,6 +147,13 @@ export function registerContractHandlers(): void {
         if (opts?.search) {
           query += ' AND (c.vendor_name LIKE ? OR c.poc_name LIKE ?)'
           params.push(`%${opts.search}%`, `%${opts.search}%`)
+        }
+        if (opts?.tag_ids && opts.tag_ids.length > 0) {
+          query += ` AND c.id IN (
+            SELECT entity_id FROM entity_tags
+            WHERE entity_type = 'contract' AND tag_id IN (${opts.tag_ids.map(() => '?').join(',')})
+          )`
+          params.push(...opts.tag_ids)
         }
         query += ' ORDER BY c.end_date ASC'
 

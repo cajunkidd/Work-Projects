@@ -94,10 +94,12 @@ declare global {
       tags: {
         list: () => Promise<IpcResponse<any[]>>
         create: (payload: any) => Promise<IpcResponse<any>>
+        update: (payload: any) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>
         forEntity: (payload: any) => Promise<IpcResponse<any[]>>
         attach: (payload: any) => Promise<IpcResponse<void>>
         detach: (payload: any) => Promise<IpcResponse<void>>
+        bulkAttach: (payload: any) => Promise<IpcResponse<any>>
       }
       approvals: {
         create: (payload: any) => Promise<IpcResponse<any>>
