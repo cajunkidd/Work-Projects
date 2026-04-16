@@ -56,6 +56,87 @@ function ToolbarBtn({
   )
 }
 
+// ─── Insert Clause Dropdown ───────────────────────────────────────────────────
+
+interface LibraryClause {
+  id: number
+  title: string
+  category: string
+  body_html: string
+  description: string
+}
+
+function InsertClauseDropdown({ onSelect }: { onSelect: (html: string) => void }) {
+  const [open, setOpen] = useState(false)
+  const [clauses, setClauses] = useState<LibraryClause[]>([])
+
+  useEffect(() => {
+    if (!open) return
+    window.api.clauses.list().then((res: any) => {
+      if (res.success && res.data) setClauses(res.data)
+    })
+  }, [open])
+
+  const grouped = clauses.reduce<Record<string, LibraryClause[]>>((acc, c) => {
+    ;(acc[c.category] ??= []).push(c)
+    return acc
+  }, {})
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="px-2 py-1 rounded text-sm font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+        title="Insert clause from library"
+      >
+        + Clause
+      </button>
+      {open && (
+        <>
+          <div
+            className="fixed inset-0 z-10"
+            onClick={() => setOpen(false)}
+          />
+          <div className="absolute top-full left-0 mt-1 bg-slate-800 border border-slate-700 rounded-lg shadow-lg z-20 w-80 max-h-80 overflow-y-auto">
+            {clauses.length === 0 ? (
+              <p className="text-slate-400 text-sm p-3 text-center">
+                No clauses in library. Add some in Settings → Clause Library.
+              </p>
+            ) : (
+              Object.entries(grouped)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([category, items]) => (
+                  <div key={category} className="p-2">
+                    <p className="text-slate-500 text-xs uppercase tracking-wide mb-1 px-2">
+                      {category}
+                    </p>
+                    {items.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          onSelect(c.body_html)
+                          setOpen(false)
+                        }}
+                        className="block w-full text-left px-2 py-1.5 rounded text-sm text-slate-200 hover:bg-slate-700"
+                      >
+                        <div className="font-medium">{c.title}</div>
+                        {c.description && (
+                          <div className="text-slate-500 text-xs truncate">{c.description}</div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ))
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 // ─── Recipient Form ───────────────────────────────────────────────────────────
 
 function RecipientForm({
@@ -377,6 +458,10 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
           <ToolbarBtn onClick={handleInsertImage} title="Insert image">
             🖼 Image
           </ToolbarBtn>
+
+          <InsertClauseDropdown
+            onSelect={(html) => editor?.chain().focus().insertContent(html).run()}
+          />
         </div>
 
         {/* Editor content area */}
