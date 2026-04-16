@@ -357,7 +357,7 @@ export default function ContractsPage() {
       {/* Tab: Search (advanced filters)                                      */}
       {/* ------------------------------------------------------------------ */}
       {activeTab === 'search' && (
-        <div className="grid grid-cols-[300px_1fr] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 items-start">
           {/* Filter panel */}
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-5 sticky top-4">
             <div className="flex items-center justify-between">
