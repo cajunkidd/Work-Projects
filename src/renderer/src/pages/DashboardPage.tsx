@@ -258,6 +258,7 @@ export default function DashboardPage() {
   const [spendTrend, setSpendTrend] = useState<{ month: string; amount: number }[]>([])
   const [projectCounts, setProjectCounts] = useState({ active: 0, on_hold: 0, completed: 0 })
   const [upcomingObligations, setUpcomingObligations] = useState<UpcomingObligation[]>([])
+  const [myApprovalQueue, setMyApprovalQueue] = useState<any[]>([])
   const [trendChart, setTrendChart] = useState<'area' | 'bar' | 'line'>('area')
   const [statusChart, setStatusChart] = useState<'donut' | 'bar' | 'radial'>('donut')
   const year = new Date().getFullYear()
@@ -330,6 +331,10 @@ export default function DashboardPage() {
     }
     window.api.obligations.upcoming(obligationOpts).then((res: any) => {
       if (res.success && res.data) setUpcomingObligations(res.data.slice(0, 8))
+    })
+
+    window.api.approvals.myQueue(user.id).then((res: any) => {
+      if (res.success && res.data) setMyApprovalQueue(res.data)
     })
   }, [selectedDeptId, year, user])
 
@@ -536,6 +541,33 @@ export default function DashboardPage() {
             )
           }
         />
+      )}
+
+      {/* My approval queue (only shown when the user has pending approvals waiting on them) */}
+      {myApprovalQueue.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-white font-semibold">Waiting on You · Approvals</p>
+            <span className="text-xs text-amber-400">{myApprovalQueue.length} pending</span>
+          </div>
+          <div className="space-y-1">
+            {myApprovalQueue.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0 cursor-pointer hover:bg-slate-800/40 rounded px-2 -mx-2"
+                onClick={() => navigate(`/contracts/${r.contract_id}`)}
+              >
+                <div>
+                  <p className="text-white text-sm font-medium">{r.vendor_name}</p>
+                  <p className="text-slate-400 text-xs">
+                    Requested by {r.requested_by_name || '—'} · {r.created_at}
+                  </p>
+                </div>
+                <Badge variant="warning">Review</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
       )}
 
       {/* Bottom row: Upcoming renewals + obligations + recent invoices + projects */}

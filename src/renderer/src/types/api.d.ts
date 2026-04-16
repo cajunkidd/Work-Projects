@@ -85,6 +85,13 @@ declare global {
         attach: (payload: any) => Promise<IpcResponse<void>>
         detach: (payload: any) => Promise<IpcResponse<void>>
       }
+      approvals: {
+        create: (payload: any) => Promise<IpcResponse<any>>
+        decide: (payload: any) => Promise<IpcResponse<any>>
+        cancel: (payload: any) => Promise<IpcResponse<void>>
+        forContract: (contract_id: number) => Promise<IpcResponse<any[]>>
+        myQueue: (user_id: number) => Promise<IpcResponse<any[]>>
+      }
       lineItems: {
         list: (contract_id: number) => Promise<IpcResponse<ContractLineItem[]>>
         upsert: (items: ContractLineItem[]) => Promise<IpcResponse<void>>

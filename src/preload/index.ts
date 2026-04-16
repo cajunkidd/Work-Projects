@@ -120,6 +120,15 @@ contextBridge.exposeInMainWorld('api', {
     detach: (payload: any) => ipcRenderer.invoke('tags:detach', payload)
   },
 
+  // Approval workflow
+  approvals: {
+    create: (payload: any) => ipcRenderer.invoke('approvals:create', payload),
+    decide: (payload: any) => ipcRenderer.invoke('approvals:decide', payload),
+    cancel: (payload: any) => ipcRenderer.invoke('approvals:cancel', payload),
+    forContract: (contract_id: number) => ipcRenderer.invoke('approvals:forContract', contract_id),
+    myQueue: (user_id: number) => ipcRenderer.invoke('approvals:myQueue', user_id)
+  },
+
   // Settings & Branding
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

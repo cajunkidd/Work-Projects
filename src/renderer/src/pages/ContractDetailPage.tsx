@@ -19,10 +19,11 @@ import type {
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 import ObligationsTab from '../components/contracts/ObligationsTab'
 import HistoryTab from '../components/contracts/HistoryTab'
+import ApprovalsTab from '../components/contracts/ApprovalsTab'
 import ContractCustomFields from '../components/contracts/ContractCustomFields'
 import ContractTags from '../components/contracts/ContractTags'
 
-const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Obligations', 'Notes', 'Projects', 'Competitors', 'History']
+const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Obligations', 'Approvals', 'Notes', 'Projects', 'Competitors', 'History']
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -476,6 +477,8 @@ export default function ContractDetailPage() {
       )}
 
       {activeTab === 'Obligations' && <ObligationsTab contractId={contractId} />}
+
+      {activeTab === 'Approvals' && <ApprovalsTab contractId={contractId} />}
 
       {activeTab === 'History' && <HistoryTab contractId={contractId} />}
 
