@@ -1,6 +1,7 @@
 import { ipcMain, dialog } from 'electron'
 import path from 'path'
 import { getDb, switchDatabase } from '../database'
+import { setConfigValue, getConfigValue } from '../localConfig'
 import { sendTestEmail } from '../emailNotifier'
 import type { IpcResponse, AppSettings } from '../../shared/types'
 
@@ -68,6 +69,8 @@ export function registerSettingsHandlers(): void {
         return { success: false, error: 'No folder selected' }
       }
       const folderPath = result.filePaths[0]
+      // Persist the path locally so it survives app restarts
+      setConfigValue('db_network_path', folderPath)
       // Switch database
       switchDatabase(folderPath)
       return { success: true, data: folderPath }

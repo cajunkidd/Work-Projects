@@ -11,6 +11,7 @@ import Badge from '../components/ui/Badge'
 import CustomFieldsSection from '../components/settings/CustomFieldsSection'
 import AiSettingsSection from '../components/settings/AiSettingsSection'
 import ClauseLibrarySection from '../components/settings/ClauseLibrarySection'
+import DeploymentSection from '../components/settings/DeploymentSection'
 import type { Department, Branch, User } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -716,13 +717,18 @@ export default function SettingsPage() {
         <section className="space-y-4">
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Shared Database Location</h2>
           <Card>
-            <p className="text-slate-400 text-sm mb-3">Point the app to a shared network folder so all team members use the same database file.</p>
+            <p className="text-slate-400 text-sm mb-3">Point the app to a shared network folder so all team members use the same database file. This setting persists across restarts.</p>
             {dbPath && <p className="text-slate-300 text-sm mb-3 break-all">{dbPath}</p>}
             <Button variant="secondary" onClick={handlePickFolder}>
-              📁 {dbPath ? 'Change Folder' : 'Select Network Folder'}
+              {dbPath ? 'Change Folder' : 'Select Network Folder'}
             </Button>
           </Card>
         </section>
+      </RoleGuard>
+
+      {/* ─── Auto-Update ─── */}
+      <RoleGuard minRole="super_admin">
+        <DeploymentSection />
       </RoleGuard>
 
       {/* ─── User Management ─── */}
