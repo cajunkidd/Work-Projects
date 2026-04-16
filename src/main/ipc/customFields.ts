@@ -217,6 +217,23 @@ export function registerCustomFieldHandlers(): void {
     }
   )
 
+  ipcMain.handle(
+    'tags:update',
+    async (_e, payload: { id: number; name?: string; color?: string }): Promise<IpcResponse<void>> => {
+      try {
+        const db = getDb()
+        const fields = Object.keys(payload).filter((k) => k !== 'id')
+        if (fields.length === 0) return { success: true }
+        const sets = fields.map((f) => `${f} = ?`).join(', ')
+        const values = fields.map((f) => (payload as any)[f])
+        db.prepare(`UPDATE tags SET ${sets} WHERE id = ?`).run(...values, payload.id)
+        return { success: true }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
   ipcMain.handle('tags:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
     try {
       getDb().prepare('DELETE FROM tags WHERE id = ?').run(id)
@@ -225,6 +242,32 @@ export function registerCustomFieldHandlers(): void {
       return { success: false, error: err.message }
     }
   })
+
+  // Bulk-attach a tag to multiple contracts at once
+  ipcMain.handle(
+    'tags:bulkAttach',
+    async (
+      _e,
+      payload: { entity_type: string; entity_ids: number[]; tag_id: number }
+    ): Promise<IpcResponse<{ attached: number }>> => {
+      try {
+        const db = getDb()
+        const stmt = db.prepare(
+          `INSERT OR IGNORE INTO entity_tags (tag_id, entity_type, entity_id)
+           VALUES (?, ?, ?)`
+        )
+        const tx = db.transaction(() => {
+          for (const eid of payload.entity_ids) {
+            stmt.run(payload.tag_id, payload.entity_type, eid)
+          }
+        })
+        tx()
+        return { success: true, data: { attached: payload.entity_ids.length } }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
 
   ipcMain.handle(
     'tags:forEntity',

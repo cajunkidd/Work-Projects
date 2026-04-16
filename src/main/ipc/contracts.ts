@@ -85,6 +85,7 @@ export function registerContractHandlers(): void {
         department_id?: number
         branch_id?: number
         search?: string
+        tag_ids?: number[]
         // role-based filtering
         role?: string
         allowed_department_ids?: number[]
@@ -147,6 +148,13 @@ export function registerContractHandlers(): void {
           query += ' AND (c.vendor_name LIKE ? OR c.poc_name LIKE ?)'
           params.push(`%${opts.search}%`, `%${opts.search}%`)
         }
+        if (opts?.tag_ids && opts.tag_ids.length > 0) {
+          query += ` AND c.id IN (
+            SELECT entity_id FROM entity_tags
+            WHERE entity_type = 'contract' AND tag_id IN (${opts.tag_ids.map(() => '?').join(',')})
+          )`
+          params.push(...opts.tag_ids)
+        }
         query += ' ORDER BY c.end_date ASC'
 
         const rows = db.prepare(query).all(...params) as Contract[]
@@ -191,8 +199,8 @@ export function registerContractHandlers(): void {
           .prepare(
             `INSERT INTO contracts
              (vendor_name, status, start_date, end_date, monthly_cost, annual_cost, total_cost,
-              poc_name, poc_email, poc_phone, department_id, branch_id, file_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              poc_name, poc_email, poc_phone, department_id, branch_id, file_path, currency)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.vendor_name,
@@ -207,7 +215,8 @@ export function registerContractHandlers(): void {
             payload.poc_phone,
             payload.department_id ?? null,
             payload.branch_id ?? null,
-            payload.file_path || null
+            payload.file_path || null,
+            payload.currency ?? 'USD'
           )
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
@@ -519,12 +528,24 @@ export function registerContractHandlers(): void {
         const row = db
           .prepare('SELECT * FROM renewal_history WHERE id = ?')
           .get(result.lastInsertRowid) as RenewalHistory
+
+        // If cost went down, log the savings
+        const savings = row.prev_cost - row.new_cost
+        if (savings > 0) {
+          const fy = new Date(row.renewal_date).getFullYear()
+          db.prepare(
+            `INSERT INTO savings_log (contract_id, renewal_id, renewal_date, amount, fiscal_year)
+             VALUES (?, ?, ?, ?, ?)`
+          ).run(payload.contract_id, row.id, row.renewal_date, savings, fy)
+        }
+
         logChange(null, 'renewal', row.id, 'create', { snapshot: row })
         logChange(null, 'contract', payload.contract_id, 'update', {
           renewal_logged: {
             id: row.id,
             date: row.renewal_date,
-            cost_delta: row.new_cost - row.prev_cost
+            cost_delta: row.new_cost - row.prev_cost,
+            savings: savings > 0 ? savings : 0
           }
         })
         return { success: true, data: row }

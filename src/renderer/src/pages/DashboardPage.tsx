@@ -259,6 +259,7 @@ export default function DashboardPage() {
   const [projectCounts, setProjectCounts] = useState({ active: 0, on_hold: 0, completed: 0 })
   const [upcomingObligations, setUpcomingObligations] = useState<UpcomingObligation[]>([])
   const [myApprovalQueue, setMyApprovalQueue] = useState<any[]>([])
+  const [savingsTotal, setSavingsTotal] = useState(0)
   const [trendChart, setTrendChart] = useState<'area' | 'bar' | 'line'>('area')
   const [statusChart, setStatusChart] = useState<'donut' | 'bar' | 'radial'>('donut')
   const year = new Date().getFullYear()
@@ -336,6 +337,10 @@ export default function DashboardPage() {
     window.api.approvals.myQueue(user.id).then((res: any) => {
       if (res.success && res.data) setMyApprovalQueue(res.data)
     })
+
+    window.api.dashboard.savingsTotal(year).then((res: any) => {
+      if (res.success && res.data !== undefined) setSavingsTotal(res.data)
+    })
   }, [selectedDeptId, year, user])
 
   // Status breakdown for pie chart
@@ -377,9 +382,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Top row: Budget gauge + stats */}
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
         {/* Budget gauge */}
-        <Card className="col-span-3 flex items-center justify-center py-4">
+        <Card className="md:col-span-3 flex items-center justify-center py-4">
           {currentSummary ? (
             <BudgetGauge summary={currentSummary} />
           ) : (
@@ -388,7 +393,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Stats */}
-        <div className="col-span-9 grid grid-cols-4 gap-4">
+        <div className="md:col-span-9 grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
             { label: 'Total Contracts', value: contracts.length, sub: 'all time' },
             {
@@ -405,6 +410,11 @@ export default function DashboardPage() {
               label: 'Annual Spend',
               value: fmt(contracts.reduce((s, c) => s + (c.annual_cost || 0), 0)),
               sub: 'active contracts'
+            },
+            {
+              label: `Savings FY${year}`,
+              value: fmt(savingsTotal),
+              sub: 'negotiated savings'
             }
           ].map((stat) => (
             <Card key={stat.label}>
@@ -417,9 +427,9 @@ export default function DashboardPage() {
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Spend trend */}
-        <Card className="col-span-8">
+        <Card className="lg:col-span-8">
           <div className="flex items-center justify-between mb-4">
             <p className="text-white font-semibold">Monthly Spend Trend</p>
             <ChartToggle
@@ -468,7 +478,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Contract status chart */}
-        <Card className="col-span-4">
+        <Card className="lg:col-span-4">
           <div className="flex items-center justify-between mb-4">
             <p className="text-white font-semibold">Contract Status</p>
             <ChartToggle
@@ -571,9 +581,9 @@ export default function DashboardPage() {
       )}
 
       {/* Bottom row: Upcoming renewals + obligations + recent invoices + projects */}
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-4">
         {/* Upcoming renewals */}
-        <Card className="col-span-4">
+        <Card className="lg:col-span-4">
           <p className="text-white font-semibold mb-3">Upcoming Renewals</p>
           {upcomingRenewals.length === 0 ? (
             <p className="text-slate-400 text-sm">No contracts expiring within 120 days</p>
@@ -601,7 +611,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Upcoming obligations */}
-        <Card className="col-span-4">
+        <Card className="lg:col-span-4">
           <p className="text-white font-semibold mb-3">Upcoming Obligations</p>
           {upcomingObligations.length === 0 ? (
             <p className="text-slate-400 text-sm">No obligations due in the next 60 days</p>
@@ -630,7 +640,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Recent invoices */}
-        <Card className="col-span-2">
+        <Card className="lg:col-span-2">
           <p className="text-white font-semibold mb-3">Recent Invoices</p>
           {recentInvoices.length === 0 ? (
             <p className="text-slate-400 text-sm">No invoices</p>
@@ -653,7 +663,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Projects */}
-        <Card className="col-span-2">
+        <Card className="lg:col-span-2">
           <p className="text-white font-semibold mb-3">Vendor Projects</p>
           <div className="space-y-3">
             {[

@@ -116,6 +116,7 @@ export interface Contract {
   department_name?: string
   branch_id: number | null
   branch_name?: string
+  currency: string
   file_path?: string
   notes_count?: number
   created_at: string

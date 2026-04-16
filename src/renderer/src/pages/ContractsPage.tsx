@@ -9,6 +9,7 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
+import { fmt } from '../utils/format'
 import type { Contract, Department, Branch } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 import ImportContractsModal from '../components/contracts/ImportContractsModal'
@@ -18,9 +19,7 @@ function statusVariant(s: string) {
   return s === 'active' ? 'success' : s === 'expiring_soon' ? 'warning' : s === 'expired' ? 'danger' : 'neutral'
 }
 
-function fmt(n: number) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-}
+// fmt imported from ../utils/format
 
 const emptyForm = {
   vendor_name: '', status: 'active', start_date: '', end_date: '',
@@ -29,8 +28,17 @@ const emptyForm = {
   scope: 'department' as 'department' | 'branch',
   department_id: '',
   branch_id: '',
-  file_path: ''
+  file_path: '',
+  currency: 'USD'
 }
+
+const CURRENCIES = [
+  { value: 'USD', label: 'USD ($)' },
+  { value: 'EUR', label: 'EUR (\u20AC)' },
+  { value: 'GBP', label: 'GBP (\u00A3)' },
+  { value: 'CAD', label: 'CAD (C$)' },
+  { value: 'MXN', label: 'MXN (Mex$)' }
+]
 
 const emptyFilters = {
   vendor: '',
@@ -45,6 +53,13 @@ const emptyFilters = {
   department_id: '',
   branch_id: '',
   renewalWithin: '',
+  tag_ids: [] as number[],
+}
+
+interface TagItem {
+  id: number
+  name: string
+  color: string
 }
 
 // Reusable contract card list
@@ -99,8 +114,8 @@ function ContractList({
               )}
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="text-white font-bold text-lg">{fmt(c.annual_cost)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
-              <p className="text-slate-400 text-sm">{fmt(c.monthly_cost)}/mo</p>
+              <p className="text-white font-bold text-lg">{fmt(c.annual_cost, c.currency)}<span className="text-slate-400 text-sm font-normal">/yr</span></p>
+              <p className="text-slate-400 text-sm">{fmt(c.monthly_cost, c.currency)}/mo</p>
             </div>
           </div>
         </Card>
@@ -123,6 +138,7 @@ export default function ContractsPage() {
   const [ftsQuery, setFtsQuery] = useState('')
   const [ftsResults, setFtsResults] = useState<(Contract & { snippet: string })[] | null>(null)
   const [ftsLoading, setFtsLoading] = useState(false)
+  const [allTags, setAllTags] = useState<TagItem[]>([])
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [exportMsg, setExportMsg] = useState('')
@@ -136,6 +152,7 @@ export default function ContractsPage() {
     if (!user) return
     const opts: any = { search: search || undefined }
 
+    if (filters.tag_ids && filters.tag_ids.length > 0) opts.tag_ids = filters.tag_ids
     if (user.role === 'super_admin') {
       if (selectedDeptId) opts.department_id = selectedDeptId
     } else {
@@ -161,9 +178,12 @@ export default function ContractsPage() {
     window.api.branches.list().then((res) => {
       if (res.success && res.data) setBranches(res.data)
     })
+    window.api.tags.list().then((res: any) => {
+      if (res.success && res.data) setAllTags(res.data)
+    })
   }, [])
 
-  useEffect(() => { load() }, [selectedDeptId, search, user])
+  useEffect(() => { load() }, [selectedDeptId, search, user, filters.tag_ids])
 
   const runFullTextSearch = async (query: string) => {
     if (!user) return
@@ -209,7 +229,8 @@ export default function ContractsPage() {
       poc_phone: form.poc_phone,
       department_id: form.scope === 'department' && form.department_id ? parseInt(form.department_id) : null,
       branch_id: form.scope === 'branch' && form.branch_id ? parseInt(form.branch_id) : null,
-      file_path: form.file_path || null
+      file_path: form.file_path || null,
+      currency: form.currency || 'USD'
     }
     const res = await window.api.contracts.create(payload)
     if (res.success && res.data && needsAllocation && allocations.length > 0) {
@@ -290,7 +311,8 @@ export default function ContractsPage() {
 
   const hasActiveFilters = filters.vendor || filters.pocName || filters.status.length > 0 ||
     filters.costOp !== 'any' || filters.startFrom || filters.startTo ||
-    filters.endFrom || filters.endTo || filters.department_id || filters.branch_id || filters.renewalWithin
+    filters.endFrom || filters.endTo || filters.department_id || filters.branch_id ||
+    filters.renewalWithin || filters.tag_ids.length > 0
 
   const inputCls = 'bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none w-full placeholder-slate-500'
 
@@ -348,7 +370,7 @@ export default function ContractsPage() {
       {/* Tab: Search (advanced filters)                                      */}
       {/* ------------------------------------------------------------------ */}
       {activeTab === 'search' && (
-        <div className="grid grid-cols-[300px_1fr] gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6 items-start">
           {/* Filter panel */}
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-5 sticky top-4">
             <div className="flex items-center justify-between">
@@ -576,6 +598,42 @@ export default function ContractsPage() {
                 <span className="text-slate-400 text-sm flex-shrink-0">days</span>
               </div>
             </div>
+
+            {/* Filter by tags */}
+            {allTags.length > 0 && (
+              <div>
+                <label className="text-slate-400 text-xs font-medium block mb-1.5">Tags</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {allTags.map((t) => {
+                    const selected = filters.tag_ids.includes(t.id)
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() =>
+                          setFilter(
+                            'tag_ids',
+                            selected
+                              ? filters.tag_ids.filter((x: number) => x !== t.id)
+                              : [...filters.tag_ids, t.id]
+                          )
+                        }
+                        className={`text-xs px-2 py-1 rounded-full font-medium border transition-colors ${
+                          selected ? 'ring-2 ring-white/40' : 'opacity-60 hover:opacity-100'
+                        }`}
+                        style={{
+                          background: t.color + '33',
+                          color: t.color,
+                          borderColor: t.color + '66'
+                        }}
+                      >
+                        {t.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Results */}
@@ -720,12 +778,18 @@ export default function ContractsPage() {
               </div>
             )
           })()}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <Input label="Start Date" type="date" value={form.start_date} onChange={(e) => f('start_date', e.target.value)} required />
             <Input label="End Date" type="date" value={form.end_date} onChange={(e) => f('end_date', e.target.value)} required />
+            <Select
+              label="Currency"
+              value={form.currency}
+              onChange={(e) => f('currency', e.target.value)}
+              options={CURRENCIES}
+            />
           </div>
           <div className="grid grid-cols-3 gap-4">
-            <Input label="Monthly Cost ($)" type="number" min="0" step="0.01" value={form.monthly_cost}
+            <Input label="Monthly Cost" type="number" min="0" step="0.01" value={form.monthly_cost}
               onChange={(e) => {
                 f('monthly_cost', e.target.value)
                 f('annual_cost', String(parseFloat(e.target.value) * 12 || 0))
