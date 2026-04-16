@@ -21,6 +21,34 @@ import type {
   RenewalHistory
 } from '../../shared/types'
 
+// ─── Field-level visibility ──────────────────────────────────────────────────
+// Strips sensitive fields from contract rows based on the caller's role.
+// super_admin: sees everything.
+// director: sees everything except poc_phone.
+// store_manager: sees vendor_name, status, dates, annual_cost, monthly_cost,
+//                branch_id, department_id — but NOT poc_email, poc_phone,
+//                total_cost, or file_path.
+const HIDDEN_FIELDS_BY_ROLE: Record<string, string[]> = {
+  director: ['poc_phone'],
+  store_manager: ['poc_email', 'poc_phone', 'total_cost', 'file_path']
+}
+
+function stripSensitiveFields<T>(row: T, role?: string): T {
+  if (!role || role === 'super_admin') return row
+  const hidden = HIDDEN_FIELDS_BY_ROLE[role]
+  if (!hidden || hidden.length === 0) return row
+  const copy = { ...row } as any
+  for (const f of hidden) {
+    if (f in copy) copy[f] = null
+  }
+  return copy as T
+}
+
+function stripMany<T>(rows: T[], role?: string): T[] {
+  if (!role || role === 'super_admin') return rows
+  return rows.map((r) => stripSensitiveFields(r, role))
+}
+
 async function extractPdfText(filePath: string): Promise<string> {
   try {
     const pdfParse = await import('pdf-parse')
@@ -122,7 +150,7 @@ export function registerContractHandlers(): void {
         query += ' ORDER BY c.end_date ASC'
 
         const rows = db.prepare(query).all(...params) as Contract[]
-        return { success: true, data: rows }
+        return { success: true, data: stripMany(rows, opts?.role) }
       } catch (err: any) {
         return { success: false, error: err.message }
       }
@@ -130,7 +158,9 @@ export function registerContractHandlers(): void {
   )
 
   // Get single contract
-  ipcMain.handle('contracts:get', async (_e, id: number): Promise<IpcResponse<Contract>> => {
+  ipcMain.handle(
+    'contracts:get',
+    async (_e, id: number, opts?: { role?: string }): Promise<IpcResponse<Contract>> => {
     try {
       const row = getDb()
         .prepare(
@@ -142,7 +172,7 @@ export function registerContractHandlers(): void {
            WHERE c.id = ?`
         )
         .get(id) as Contract
-      return { success: true, data: row }
+      return { success: true, data: stripSensitiveFields(row, opts?.role) }
     } catch (err: any) {
       return { success: false, error: err.message }
     }
@@ -336,7 +366,7 @@ export function registerContractHandlers(): void {
              LIMIT 100`
           )
           .all(...params) as (Contract & { snippet: string })[]
-        return { success: true, data: rows }
+        return { success: true, data: stripMany(rows, opts.role) }
       } catch (err: any) {
         return { success: false, error: err.message }
       }
