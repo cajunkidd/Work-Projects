@@ -283,6 +283,7 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
       documentTitle: title,
       recipientName,
       recipientEmail,
+      // TipTap builder PDFs are generated locally; no Drive involvement.
       documentPath: pdfRes.data.path
     })
 
@@ -440,12 +441,13 @@ function UploadPanel({ onSent }: { onSent: () => void }) {
 
   const handleUpload = async () => {
     setUploading(true)
-    setMsg('')
+    setMsg('Uploading to Google Drive...')
     const res = await window.api.contractCreation.uploadTemplate()
     setUploading(false)
     if (res.success && res.data) {
       setTemplate(res.data)
       setTitle(res.data.title)
+      setMsg('')
     } else if (res.error !== 'Cancelled') {
       setMsg(`Upload error: ${res.error}`)
     }
@@ -466,7 +468,11 @@ function UploadPanel({ onSent }: { onSent: () => void }) {
       documentTitle: title,
       recipientName,
       recipientEmail,
-      documentPath: template.file_path!
+      // New Drive-hosted templates pass a fileId; legacy templates fall
+      // back to the local file_path for back-compat.
+      driveFileId: template.drive_file_id,
+      driveWebViewLink: template.drive_web_view_link,
+      documentPath: template.drive_file_id ? undefined : template.file_path
     })
 
     setSending(false)
@@ -496,14 +502,18 @@ function UploadPanel({ onSent }: { onSent: () => void }) {
           <div className="space-y-1">
             <p className="text-2xl">📄</p>
             <p className="text-white font-medium">{template.title}</p>
-            <p className="text-slate-400 text-xs truncate max-w-sm mx-auto">{template.file_path}</p>
+            {template.drive_web_view_link ? (
+              <p className="text-emerald-400 text-xs">✓ Stored in Google Drive</p>
+            ) : template.file_path ? (
+              <p className="text-amber-400 text-xs">legacy file — requires VPN</p>
+            ) : null}
             <p className="text-slate-500 text-xs mt-2">Click to replace</p>
           </div>
         ) : (
           <div className="space-y-2">
             <p className="text-3xl">📁</p>
             <p className="text-slate-300 font-medium">
-              {uploading ? 'Opening file picker...' : 'Click to upload a contract template'}
+              {uploading ? 'Uploading to Google Drive...' : 'Click to upload a contract template'}
             </p>
             <p className="text-slate-500 text-xs">Supported formats: PDF, DOCX, DOC</p>
           </div>

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
+import { app, BrowserWindow, ipcMain, protocol, net, shell } from 'electron'
 import path from 'path'
 import { pathToFileURL } from 'url'
 import { initDatabase, updateContractStatuses } from './database'
@@ -11,6 +11,7 @@ import { registerProjectHandlers } from './ipc/projects'
 import { registerNoteHandlers } from './ipc/notes'
 import { registerSettingsHandlers } from './ipc/settings'
 import { registerGmailHandlers } from './ipc/gmail'
+import { registerDriveHandlers } from './ipc/drive'
 import { registerImportHandlers } from './ipc/importContracts'
 import { registerAssetHandlers } from './ipc/assets'
 import { registerExportHandlers } from './ipc/exports'
@@ -74,6 +75,7 @@ app.whenReady().then(() => {
   registerNoteHandlers()
   registerSettingsHandlers()
   registerGmailHandlers()
+  registerDriveHandlers()
   registerImportHandlers()
   registerAssetHandlers()
   registerExportHandlers()
@@ -82,6 +84,17 @@ app.whenReady().then(() => {
   // IPC for getting upcoming renewals (used by renderer)
   ipcMain.handle('scheduler:upcomingRenewals', () => {
     return { success: true, data: getUpcomingRenewals() }
+  })
+
+  // Generalized shell.openExternal — used for Drive auth URLs, Drive
+  // webViewLinks, and (going forward) Gmail auth URLs.
+  ipcMain.handle('system:openUrl', async (_e, url: string) => {
+    try {
+      await shell.openExternal(url)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
   })
 
   // Update contract statuses on startup

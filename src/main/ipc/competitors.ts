@@ -1,5 +1,7 @@
 import { ipcMain, dialog } from 'electron'
+import path from 'path'
 import { getDb } from '../database'
+import { uploadToDrive } from './drive'
 import type { IpcResponse, CompetitorOffering } from '../../shared/types'
 
 export function registerCompetitorHandlers(): void {
@@ -30,15 +32,17 @@ export function registerCompetitorHandlers(): void {
         const result = db
           .prepare(
             `INSERT INTO competitor_offerings
-             (contract_id, competitor_vendor, offering_name, price, file_path, notes)
-             VALUES (?,?,?,?,?,?)`
+             (contract_id, competitor_vendor, offering_name, price,
+              drive_file_id, drive_web_view_link, notes)
+             VALUES (?,?,?,?,?,?,?)`
           )
           .run(
             payload.contract_id,
             payload.competitor_vendor,
             payload.offering_name,
             payload.price,
-            payload.file_path || null,
+            payload.drive_file_id || null,
+            payload.drive_web_view_link || null,
             payload.notes
           )
         const row = db
@@ -60,19 +64,27 @@ export function registerCompetitorHandlers(): void {
     }
   })
 
-  // File picker for competitor offering
-  ipcMain.handle('competitors:pickFile', async (): Promise<IpcResponse<string>> => {
-    try {
-      const result = await dialog.showOpenDialog({
-        filters: [{ name: 'Documents', extensions: ['pdf', 'xlsx', 'xls', 'docx'] }],
-        properties: ['openFile']
-      })
-      if (result.canceled || result.filePaths.length === 0) {
-        return { success: false, error: 'No file selected' }
+  // File picker for competitor offering (uploads to Google Drive)
+  ipcMain.handle(
+    'competitors:pickFile',
+    async (): Promise<
+      IpcResponse<{ driveFileId: string; webViewLink: string; filename: string }>
+    > => {
+      try {
+        const result = await dialog.showOpenDialog({
+          filters: [{ name: 'Documents', extensions: ['pdf', 'xlsx', 'xls', 'docx'] }],
+          properties: ['openFile']
+        })
+        if (result.canceled || result.filePaths.length === 0) {
+          return { success: false, error: 'No file selected' }
+        }
+        const filePath = result.filePaths[0]
+        const filename = path.basename(filePath)
+        const { fileId, webViewLink } = await uploadToDrive(filePath, filename)
+        return { success: true, data: { driveFileId: fileId, webViewLink, filename } }
+      } catch (err: any) {
+        return { success: false, error: err.message }
       }
-      return { success: true, data: result.filePaths[0] }
-    } catch (err: any) {
-      return { success: false, error: err.message }
     }
-  })
+  )
 }

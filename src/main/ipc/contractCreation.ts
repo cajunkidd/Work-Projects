@@ -2,6 +2,7 @@ import { ipcMain, dialog, app, BrowserWindow } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb } from '../database'
+import { uploadToDrive, downloadFromDriveToTemp } from './drive'
 import type { IpcResponse, ContractTemplate, SigningRequest } from '../../shared/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -237,7 +238,7 @@ export function registerContractCreationHandlers(): void {
     }
   )
 
-  // ── Upload a PDF/DOCX template via file dialog ────────────────────────────
+  // ── Upload a PDF/DOCX template via file dialog (uploads to Google Drive) ──
   ipcMain.handle(
     'contractCreation:uploadTemplate',
     async (_, payload?: { title?: string }): Promise<IpcResponse<ContractTemplate>> => {
@@ -255,11 +256,13 @@ export function registerContractCreationHandlers(): void {
         const filePath = result.filePaths[0]
         const title = payload?.title || path.basename(filePath, path.extname(filePath))
 
+        const { fileId, webViewLink } = await uploadToDrive(filePath, path.basename(filePath))
+
         const ins = db
           .prepare(
-            "INSERT INTO contract_templates (title, type, file_path) VALUES (?, 'uploaded', ?)"
+            "INSERT INTO contract_templates (title, type, drive_file_id, drive_web_view_link) VALUES (?, 'uploaded', ?, ?)"
           )
-          .run(title, filePath)
+          .run(title, fileId, webViewLink)
 
         const row = db
           .prepare('SELECT * FROM contract_templates WHERE id = ?')
@@ -314,6 +317,9 @@ export function registerContractCreationHandlers(): void {
   )
 
   // ── Send document for e-signature via Documenso ───────────────────────────
+  // Accepts either a Drive-hosted file (driveFileId + webViewLink) or a
+  // locally-generated PDF path (documentPath — used by the TipTap builder,
+  // which writes to app.userData/temp).
   ipcMain.handle(
     'contractCreation:send',
     async (
@@ -324,9 +330,12 @@ export function registerContractCreationHandlers(): void {
         documentTitle: string
         recipientName: string
         recipientEmail: string
-        documentPath: string
+        driveFileId?: string
+        driveWebViewLink?: string
+        documentPath?: string
       }
     ): Promise<IpcResponse<{ requestId: number }>> => {
+      let tempDownloadPath: string | null = null
       try {
         const config = getDocumensoConfig()
         if (!config) {
@@ -337,9 +346,23 @@ export function registerContractCreationHandlers(): void {
           }
         }
 
+        // Resolve the on-disk path Documenso will read.
+        let pdfPath: string
+        if (payload.driveFileId) {
+          tempDownloadPath = await downloadFromDriveToTemp(payload.driveFileId)
+          pdfPath = tempDownloadPath
+        } else if (payload.documentPath) {
+          pdfPath = payload.documentPath
+        } else {
+          return {
+            success: false,
+            error: 'No document provided — pass driveFileId or documentPath.'
+          }
+        }
+
         const { documentId } = await documensoUploadAndSend(
           config,
-          payload.documentPath,
+          pdfPath,
           payload.documentTitle,
           payload.recipientName,
           payload.recipientEmail
@@ -349,8 +372,8 @@ export function registerContractCreationHandlers(): void {
           .prepare(`
             INSERT INTO signing_requests
               (template_id, contract_id, document_title, recipient_name, recipient_email,
-               documenso_document_id, status, document_path, sent_at)
-            VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, datetime('now'))
+               documenso_document_id, status, drive_file_id, drive_web_view_link, document_path, sent_at)
+            VALUES (?, ?, ?, ?, ?, ?, 'sent', ?, ?, ?, datetime('now'))
           `)
           .run(
             payload.templateId ?? null,
@@ -359,12 +382,20 @@ export function registerContractCreationHandlers(): void {
             payload.recipientName,
             payload.recipientEmail,
             documentId,
-            payload.documentPath
+            payload.driveFileId ?? null,
+            payload.driveWebViewLink ?? null,
+            // For the TipTap-built flow, stash the temp pdf path for reference;
+            // for the Drive flow, leave document_path NULL (Drive is the source of truth).
+            payload.driveFileId ? null : (payload.documentPath ?? null)
           )
 
         return { success: true, data: { requestId: ins.lastInsertRowid as number } }
       } catch (e: any) {
         return { success: false, error: e.message }
+      } finally {
+        if (tempDownloadPath) {
+          fs.promises.unlink(tempDownloadPath).catch(() => {})
+        }
       }
     }
   )

@@ -329,8 +329,18 @@ export default function ContractDetailPage() {
             </div>
             <div className="space-y-3">
               <h3 className="text-white font-semibold">Contract File</h3>
-              {contract.file_path ? (
-                <p className="text-slate-300 text-sm truncate">{contract.file_path}</p>
+              {contract.drive_web_view_link ? (
+                <Button
+                  variant="secondary"
+                  onClick={() => window.api.system.openUrl(contract.drive_web_view_link!)}
+                >
+                  📄 Open in Google Drive
+                </Button>
+              ) : contract.file_path ? (
+                <div className="space-y-1">
+                  <p className="text-slate-300 text-sm truncate">{contract.file_path}</p>
+                  <Badge variant="warning">legacy — requires VPN</Badge>
+                </div>
               ) : (
                 <p className="text-slate-400 text-sm">No file attached</p>
               )}

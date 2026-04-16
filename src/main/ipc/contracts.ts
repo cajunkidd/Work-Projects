@@ -2,6 +2,7 @@ import { ipcMain, dialog } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb } from '../database'
+import { uploadToDrive } from './drive'
 import {
   notifyContractCreated,
   notifyContractUpdated,
@@ -140,8 +141,9 @@ export function registerContractHandlers(): void {
           .prepare(
             `INSERT INTO contracts
              (vendor_name, status, start_date, end_date, monthly_cost, annual_cost, total_cost,
-              poc_name, poc_email, poc_phone, department_id, branch_id, file_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              poc_name, poc_email, poc_phone, department_id, branch_id,
+              drive_file_id, drive_web_view_link)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.vendor_name,
@@ -156,7 +158,8 @@ export function registerContractHandlers(): void {
             payload.poc_phone,
             payload.department_id ?? null,
             payload.branch_id ?? null,
-            payload.file_path || null
+            payload.drive_file_id || null,
+            payload.drive_web_view_link || null
           )
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
@@ -210,30 +213,49 @@ export function registerContractHandlers(): void {
     }
   })
 
-  // Upload contract file (opens dialog)
-  ipcMain.handle('contracts:uploadFile', async (): Promise<IpcResponse<{ path: string; text?: string; rows?: Record<string,string>[] }>> => {
-    try {
-      const result = await dialog.showOpenDialog({
-        filters: [{ name: 'Contracts', extensions: ['pdf', 'xlsx', 'xls'] }],
-        properties: ['openFile']
-      })
-      if (result.canceled || result.filePaths.length === 0) {
-        return { success: false, error: 'No file selected' }
-      }
-      const filePath = result.filePaths[0]
-      const ext = path.extname(filePath).toLowerCase()
+  // Upload contract file (opens dialog + uploads to Google Drive)
+  ipcMain.handle(
+    'contracts:uploadFile',
+    async (): Promise<
+      IpcResponse<{
+        driveFileId: string
+        webViewLink: string
+        text?: string
+        rows?: Record<string, string>[]
+      }>
+    > => {
+      try {
+        const result = await dialog.showOpenDialog({
+          filters: [{ name: 'Contracts', extensions: ['pdf', 'xlsx', 'xls'] }],
+          properties: ['openFile']
+        })
+        if (result.canceled || result.filePaths.length === 0) {
+          return { success: false, error: 'No file selected' }
+        }
+        const filePath = result.filePaths[0]
+        const ext = path.extname(filePath).toLowerCase()
 
-      if (ext === '.pdf') {
-        const text = await parsePdf(filePath)
-        return { success: true, data: { path: filePath, text } }
-      } else {
-        const rows = await parseXlsx(filePath)
-        return { success: true, data: { path: filePath, rows } }
+        // Parse locally first (so we can auto-fill contract fields in the renderer).
+        let text: string | undefined
+        let rows: Record<string, string>[] | undefined
+        if (ext === '.pdf') {
+          text = await parsePdf(filePath)
+        } else {
+          rows = await parseXlsx(filePath)
+        }
+
+        // Then upload the original to the configured Shared Drive folder.
+        const { fileId, webViewLink } = await uploadToDrive(filePath, path.basename(filePath))
+
+        return {
+          success: true,
+          data: { driveFileId: fileId, webViewLink, text, rows }
+        }
+      } catch (err: any) {
+        return { success: false, error: err.message }
       }
-    } catch (err: any) {
-      return { success: false, error: err.message }
     }
-  })
+  )
 
   // Line items
   ipcMain.handle(

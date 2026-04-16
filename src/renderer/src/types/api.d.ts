@@ -72,7 +72,9 @@ declare global {
         list: (contract_id: number) => Promise<IpcResponse<CompetitorOffering[]>>
         create: (payload: any) => Promise<IpcResponse<CompetitorOffering>>
         delete: (id: number) => Promise<IpcResponse<void>>
-        pickFile: () => Promise<IpcResponse<string>>
+        pickFile: () => Promise<
+          IpcResponse<{ driveFileId: string; webViewLink: string; filename: string }>
+        >
       }
       projects: {
         list: (opts?: any) => Promise<IpcResponse<VendorProject[]>>
@@ -97,6 +99,16 @@ declare global {
         connect: (code: string) => Promise<IpcResponse<string>>
         disconnect: () => Promise<IpcResponse<void>>
         poll: () => Promise<IpcResponse<number>>
+        openUrl: (url: string) => Promise<IpcResponse<void>>
+      }
+      drive: {
+        getAuthUrl: () => Promise<IpcResponse<string>>
+        connect: (code: string) => Promise<IpcResponse<string>>
+        disconnect: () => Promise<IpcResponse<void>>
+        status: () => Promise<IpcResponse<{ connected: boolean; email: string; folderId: string }>>
+        saveFolder: (folderId: string) => Promise<IpcResponse<void>>
+      }
+      system: {
         openUrl: (url: string) => Promise<IpcResponse<void>>
       }
       dashboard: {

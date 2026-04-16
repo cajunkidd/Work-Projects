@@ -29,7 +29,8 @@ const emptyForm = {
   scope: 'department' as 'department' | 'branch',
   department_id: '',
   branch_id: '',
-  file_path: ''
+  drive_file_id: '',
+  drive_web_view_link: ''
 }
 
 const emptyFilters = {
@@ -111,6 +112,7 @@ export default function ContractsPage() {
   const [form, setForm] = useState(emptyForm)
   const [saving, setSaving] = useState(false)
   const [uploadedFile, setUploadedFile] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
   const [needsAllocation, setNeedsAllocation] = useState(false)
   const [allocations, setAllocations] = useState<AllocationRow[]>([])
 
@@ -148,10 +150,18 @@ export default function ContractsPage() {
   useEffect(() => { load() }, [selectedDeptId, search, user])
 
   const handleUpload = async () => {
+    setUploading(true)
     const res = await window.api.contracts.uploadFile()
+    setUploading(false)
     if (res.success && res.data) {
-      setUploadedFile(res.data.path)
-      setForm((f) => ({ ...f, file_path: res.data!.path }))
+      setUploadedFile(res.data.driveFileId)
+      setForm((f) => ({
+        ...f,
+        drive_file_id: res.data!.driveFileId,
+        drive_web_view_link: res.data!.webViewLink
+      }))
+    } else if (res.error && res.error !== 'No file selected') {
+      alert(`Upload failed: ${res.error}`)
     }
   }
 
@@ -171,7 +181,8 @@ export default function ContractsPage() {
       poc_phone: form.poc_phone,
       department_id: form.scope === 'department' && form.department_id ? parseInt(form.department_id) : null,
       branch_id: form.scope === 'branch' && form.branch_id ? parseInt(form.branch_id) : null,
-      file_path: form.file_path || null
+      drive_file_id: form.drive_file_id || null,
+      drive_web_view_link: form.drive_web_view_link || null
     }
     const res = await window.api.contracts.create(payload)
     if (res.success && res.data && needsAllocation && allocations.length > 0) {
@@ -641,10 +652,10 @@ export default function ContractsPage() {
             <Input label="POC Phone" value={form.poc_phone} onChange={(e) => f('poc_phone', e.target.value)} />
           </div>
           <div className="flex items-center gap-3">
-            <Button type="button" variant="secondary" onClick={handleUpload}>
-              📁 Upload Contract File
+            <Button type="button" variant="secondary" onClick={handleUpload} disabled={uploading}>
+              {uploading ? '⏳ Uploading to Google Drive...' : '📁 Upload Contract File'}
             </Button>
-            {uploadedFile && <span className="text-emerald-400 text-sm">✓ File attached</span>}
+            {uploadedFile && !uploading && <span className="text-emerald-400 text-sm">✓ File uploaded to Google Drive</span>}
           </div>
           <div className="flex gap-3 pt-2">
             <Button type="submit" disabled={saving} className="flex-1 justify-center">

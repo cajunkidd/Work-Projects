@@ -46,6 +46,15 @@ export default function SettingsPage() {
   const [showGmailCode, setShowGmailCode] = useState(false)
   const [gmailMsg, setGmailMsg] = useState('')
 
+  // Google Drive (contract document storage)
+  const [driveConnected, setDriveConnected] = useState(false)
+  const [driveEmail, setDriveEmail] = useState('')
+  const [driveFolderId, setDriveFolderId] = useState('')
+  const [driveAuthCode, setDriveAuthCode] = useState('')
+  const [showDriveCode, setShowDriveCode] = useState(false)
+  const [driveMsg, setDriveMsg] = useState('')
+  const [driveFolderSaving, setDriveFolderSaving] = useState(false)
+
   // User management
   const [showUserModal, setShowUserModal] = useState(false)
   const [userForm, setUserForm] = useState({
@@ -106,6 +115,13 @@ export default function SettingsPage() {
     })
     window.api.users.list().then((res) => {
       if (res.success && res.data) setUsers(res.data)
+    })
+    window.api.drive.status().then((res) => {
+      if (res.success && res.data) {
+        setDriveConnected(res.data.connected)
+        setDriveEmail(res.data.email)
+        setDriveFolderId(res.data.folderId)
+      }
     })
   }
 
@@ -205,6 +221,45 @@ export default function SettingsPage() {
     await window.api.gmail.disconnect()
     setGmailConnected(false)
     setGmailEmail('')
+  }
+
+  // Google Drive — admin sets up the Shared Drive folder once; end-users
+  // each connect their own Google account. Uses the paste-code OAuth flow
+  // identical to Gmail, but via system.openUrl.
+  const handleDriveAuth = async () => {
+    const res = await window.api.drive.getAuthUrl()
+    if (res.success && res.data) {
+      await window.api.system.openUrl(res.data)
+      setShowDriveCode(true)
+    }
+  }
+
+  const handleDriveConnect = async () => {
+    const res = await window.api.drive.connect(driveAuthCode.trim())
+    if (res.success) {
+      setDriveConnected(true)
+      setDriveEmail(res.data || '')
+      setDriveMsg('Connected!')
+      setShowDriveCode(false)
+      setDriveAuthCode('')
+    } else {
+      setDriveMsg(res.error || 'Failed to connect')
+    }
+    setTimeout(() => setDriveMsg(''), 4000)
+  }
+
+  const handleDriveDisconnect = async () => {
+    await window.api.drive.disconnect()
+    setDriveConnected(false)
+    setDriveEmail('')
+  }
+
+  const handleDriveFolderSave = async () => {
+    setDriveFolderSaving(true)
+    const res = await window.api.drive.saveFolder(driveFolderId)
+    setDriveFolderSaving(false)
+    setDriveMsg(res.success ? '✓ Folder saved' : `Error: ${res.error}`)
+    setTimeout(() => setDriveMsg(''), 4000)
   }
 
   // Budget upsert
@@ -427,6 +482,75 @@ export default function SettingsPage() {
                 {gmailMsg && <p className="text-sm text-slate-300">{gmailMsg}</p>}
               </div>
             )}
+          </Card>
+        </section>
+      </RoleGuard>
+
+      {/* ─── Google Drive (Contract Document Storage) ─── */}
+      <RoleGuard minRole="super_admin">
+        <section className="space-y-4">
+          <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Google Drive (Contract Documents)</h2>
+          <Card>
+            <div className="space-y-4">
+              <p className="text-slate-400 text-sm">
+                Store contract documents on a Google Shared Drive so they're accessible without VPN.
+                Every user connects their own Google account; all uploads go to the folder below.
+              </p>
+
+              {driveConnected ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="success">Connected</Badge>
+                    <span className="text-slate-300 text-sm">{driveEmail}</span>
+                  </div>
+                  <Button variant="danger" onClick={handleDriveDisconnect}>Disconnect Google Drive</Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-amber-400/80 text-xs">
+                    Requires Google OAuth credentials (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).
+                  </p>
+                  <Button variant="secondary" onClick={handleDriveAuth}>Connect Google Drive Account</Button>
+                  {showDriveCode && (
+                    <div className="space-y-2">
+                      <p className="text-slate-300 text-sm">A browser window has opened. Authorize the app, then paste the code below:</p>
+                      <div className="flex gap-2">
+                        <Input placeholder="Authorization code" value={driveAuthCode} onChange={(e) => setDriveAuthCode(e.target.value)} className="flex-1" />
+                        <Button onClick={handleDriveConnect}>Connect</Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Shared Drive folder ID — admin pastes from a Drive URL */}
+              <div className="pt-4 border-t border-slate-800">
+                <label className="block text-slate-400 text-xs font-medium mb-1.5">
+                  Shared Drive Folder ID
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    className="bg-slate-900 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-[var(--brand-primary)] flex-1 placeholder-slate-500 font-mono"
+                    placeholder="e.g. 0ABcDeFgHiJkLmNoPqRsTuVwXyZ"
+                    value={driveFolderId}
+                    onChange={(e) => setDriveFolderId(e.target.value)}
+                  />
+                  <Button onClick={handleDriveFolderSave} disabled={driveFolderSaving || !driveFolderId.trim()}>
+                    {driveFolderSaving ? 'Saving...' : 'Save'}
+                  </Button>
+                </div>
+                <p className="text-slate-500 text-xs mt-1">
+                  Open the target folder in Google Drive and copy the ID from the URL
+                  (the segment after <code className="text-slate-400">/folders/</code>).
+                </p>
+              </div>
+
+              {driveMsg && (
+                <p className={`text-sm ${driveMsg.startsWith('✓') || driveMsg === 'Connected!' ? 'text-emerald-400' : 'text-red-400'}`}>
+                  {driveMsg}
+                </p>
+              )}
+            </div>
           </Card>
         </section>
       </RoleGuard>

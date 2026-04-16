@@ -106,7 +106,12 @@ export interface Contract {
   department_name?: string
   branch_id: number | null
   branch_name?: string
+  /** Legacy VPN-only network share path. Present only for pre-migration rows. */
   file_path?: string
+  /** Google Drive file ID for documents uploaded after the Drive migration. */
+  drive_file_id?: string
+  /** Google Drive webViewLink — opens the file in the user's browser. */
+  drive_web_view_link?: string
   notes_count?: number
   created_at: string
   days_until_renewal?: number
@@ -139,7 +144,10 @@ export interface CompetitorOffering {
   competitor_vendor: string
   offering_name: string
   price: number
+  /** Legacy VPN-only network share path. Present only for pre-migration rows. */
   file_path?: string
+  drive_file_id?: string
+  drive_web_view_link?: string
   notes: string
   created_at: string
 }
@@ -195,6 +203,10 @@ export interface AppSettings {
   db_network_path?: string
   gmail_connected?: string
   gmail_email?: string
+  // Google Drive (shared folder for contract documents)
+  drive_connected?: string
+  drive_email?: string
+  drive_folder_id?: string
   // Email / SMTP notifications
   smtp_enabled?: string   // 'true' | 'false'
   smtp_host?: string
@@ -215,7 +227,11 @@ export interface ContractTemplate {
   title: string
   type: 'built' | 'uploaded'
   content?: string      // TipTap JSON (for 'built')
-  file_path?: string    // absolute path to PDF (for 'uploaded')
+  /** Legacy local path (pre-migration uploaded templates). */
+  file_path?: string
+  /** Google Drive file ID for templates uploaded after the Drive migration. */
+  drive_file_id?: string
+  drive_web_view_link?: string
   created_at: string
 }
 
@@ -230,7 +246,10 @@ export interface SigningRequest {
   recipient_email: string
   documenso_document_id?: string
   status: SigningRequestStatus
+  /** Legacy local path (pre-migration signing requests). */
   document_path?: string
+  drive_file_id?: string
+  drive_web_view_link?: string
   sent_at?: string
   completed_at?: string
   created_at: string

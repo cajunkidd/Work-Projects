@@ -150,6 +150,7 @@ function runMigrations(): void {
   runV3Migration()
   runV4Migration()
   runV5Migration()
+  runV6Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -367,6 +368,28 @@ function runV5Migration(): void {
   `)
 
   db.pragma('user_version = 5')
+}
+
+function runV6Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 6) return
+
+  // Add Google Drive columns alongside the existing (legacy) file_path.
+  // New uploads populate these; legacy rows keep file_path pointing at the
+  // VPN-only network share and show as read-only in the UI.
+  const addColumn = (table: string, column: string): void => {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+    if (!cols.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} TEXT`)
+    }
+  }
+
+  for (const table of ['contracts', 'competitor_offerings', 'contract_templates', 'signing_requests']) {
+    addColumn(table, 'drive_file_id')
+    addColumn(table, 'drive_web_view_link')
+  }
+
+  db.pragma('user_version = 6')
 }
 
 export function updateContractStatuses(): void {

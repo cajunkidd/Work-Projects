@@ -101,6 +101,20 @@ contextBridge.exposeInMainWorld('api', {
     openUrl: (url: string) => ipcRenderer.invoke('gmail:openUrl', url)
   },
 
+  // Google Drive (contract document storage)
+  drive: {
+    getAuthUrl: () => ipcRenderer.invoke('drive:getAuthUrl'),
+    connect: (code: string) => ipcRenderer.invoke('drive:connect', code),
+    disconnect: () => ipcRenderer.invoke('drive:disconnect'),
+    status: () => ipcRenderer.invoke('drive:status'),
+    saveFolder: (folderId: string) => ipcRenderer.invoke('drive:saveFolder', folderId)
+  },
+
+  // Generic shell helpers
+  system: {
+    openUrl: (url: string) => ipcRenderer.invoke('system:openUrl', url)
+  },
+
   // Dashboard
   dashboard: {
     spendTrend: (opts: any) => ipcRenderer.invoke('dashboard:spendTrend', opts),
