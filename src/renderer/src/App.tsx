@@ -30,6 +30,13 @@ export default function App() {
     applyThemeToDom()
   }, [applyThemeToDom])
 
+  // Re-register the current user as the audit actor after persist rehydrate.
+  useEffect(() => {
+    if (user) {
+      window.api?.audit?.setActor({ user_id: user.id, user_name: user.name })
+    }
+  }, [user])
+
   return (
     <HashRouter>
       <Routes>

@@ -95,6 +95,13 @@ contextBridge.exposeInMainWorld('api', {
     upcoming: (opts?: any) => ipcRenderer.invoke('obligations:upcoming', opts)
   },
 
+  // Audit log
+  audit: {
+    setActor: (actor: any) => ipcRenderer.invoke('audit:setActor', actor),
+    entity: (payload: any) => ipcRenderer.invoke('audit:entity', payload),
+    recent: (limit?: number) => ipcRenderer.invoke('audit:recent', limit)
+  },
+
   // Settings & Branding
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

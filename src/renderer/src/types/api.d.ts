@@ -53,6 +53,21 @@ declare global {
         update: (payload: any) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>
         uploadFile: () => Promise<IpcResponse<any>>
+        searchFullText: (opts: any) => Promise<IpcResponse<(Contract & { snippet: string })[]>>
+        reextractText: (id: number) => Promise<IpcResponse<{ length: number }>>
+      }
+      obligations: {
+        list: (contract_id: number) => Promise<IpcResponse<any[]>>
+        create: (payload: any) => Promise<IpcResponse<any>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        complete: (id: number) => Promise<IpcResponse<any | null>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+        upcoming: (opts?: any) => Promise<IpcResponse<any[]>>
+      }
+      audit: {
+        setActor: (actor: { user_id: number; user_name: string } | null) => Promise<IpcResponse<void>>
+        entity: (payload: { entity_type: string; entity_id: number; limit?: number }) => Promise<IpcResponse<any[]>>
+        recent: (limit?: number) => Promise<IpcResponse<any[]>>
       }
       lineItems: {
         list: (contract_id: number) => Promise<IpcResponse<ContractLineItem[]>>

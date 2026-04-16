@@ -15,8 +15,16 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       user: null,
-      login: (user) => set({ user }),
-      logout: () => set({ user: null }),
+      login: (user) => {
+        set({ user })
+        // Tell the main process who is making subsequent mutations so the
+        // audit log can attribute them.
+        window.api?.audit?.setActor({ user_id: user.id, user_name: user.name })
+      },
+      logout: () => {
+        set({ user: null })
+        window.api?.audit?.setActor(null)
+      },
       can: (minRole: UserRole) => {
         const { user } = get()
         if (!user) return false

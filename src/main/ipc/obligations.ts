@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
+import { logChange, computeDiff } from '../audit'
 import type { IpcResponse } from '../../shared/types'
 import type { ContractObligation, ObligationStatus, ObligationRecurrence } from '../../shared/types'
 
@@ -62,6 +63,10 @@ export function registerObligationHandlers(): void {
              WHERE o.id = ?`
           )
           .get(result.lastInsertRowid) as ContractObligation
+        logChange(null, 'obligation', row.id, 'create', { snapshot: row })
+        logChange(null, 'contract', row.contract_id, 'update', {
+          obligation_added: { id: row.id, title: row.title, due_date: row.due_date }
+        })
         return { success: true, data: row }
       } catch (err: any) {
         return { success: false, error: err.message }
@@ -78,6 +83,9 @@ export function registerObligationHandlers(): void {
     ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const before = db
+          .prepare('SELECT * FROM contract_obligations WHERE id = ?')
+          .get(payload.id) as ContractObligation | undefined
         const fields = Object.keys(payload).filter((k) => k !== 'id' && k !== 'responsible_user_name')
         if (fields.length === 0) return { success: true }
         const sets = fields.map((f) => `${f} = ?`).join(', ')
@@ -86,6 +94,14 @@ export function registerObligationHandlers(): void {
           ...values,
           payload.id
         )
+        if (before) {
+          const after: Record<string, unknown> = {}
+          for (const f of fields) after[f] = (payload as any)[f]
+          const diff = computeDiff(before as any, after)
+          if (Object.keys(diff).length > 0) {
+            logChange(null, 'obligation', payload.id, 'update', diff)
+          }
+        }
         return { success: true }
       } catch (err: any) {
         return { success: false, error: err.message }
@@ -108,6 +124,12 @@ export function registerObligationHandlers(): void {
            SET status = 'completed', completed_at = datetime('now')
            WHERE id = ?`
         ).run(id)
+        logChange(null, 'obligation', id, 'update', {
+          status: { from: current.status, to: 'completed' }
+        })
+        logChange(null, 'contract', current.contract_id, 'update', {
+          obligation_completed: { id, title: current.title }
+        })
 
         let nextRow: ContractObligation | null = null
         if (current.recurrence && current.recurrence !== 'none') {
@@ -145,7 +167,17 @@ export function registerObligationHandlers(): void {
   // Delete obligation
   ipcMain.handle('obligations:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
     try {
-      getDb().prepare('DELETE FROM contract_obligations WHERE id = ?').run(id)
+      const db = getDb()
+      const row = db
+        .prepare('SELECT * FROM contract_obligations WHERE id = ?')
+        .get(id) as ContractObligation | undefined
+      db.prepare('DELETE FROM contract_obligations WHERE id = ?').run(id)
+      if (row) {
+        logChange(null, 'obligation', id, 'delete', { snapshot: row })
+        logChange(null, 'contract', row.contract_id, 'update', {
+          obligation_deleted: { id, title: row.title }
+        })
+      }
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }

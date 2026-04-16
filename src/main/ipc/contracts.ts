@@ -8,6 +8,7 @@ import {
   setContractExtractedText,
   rebuildContractFtsIfEmpty
 } from '../database'
+import { logChange, computeDiff, type AuditActor } from '../audit'
 import {
   notifyContractCreated,
   notifyContractUpdated,
@@ -150,7 +151,10 @@ export function registerContractHandlers(): void {
   // Create contract
   ipcMain.handle(
     'contracts:create',
-    async (_e, payload: Omit<Contract, 'id' | 'created_at'>): Promise<IpcResponse<Contract>> => {
+    async (
+      _e,
+      payload: Omit<Contract, 'id' | 'created_at'> & { _actor?: AuditActor }
+    ): Promise<IpcResponse<Contract>> => {
       try {
         const db = getDb()
         const result = db
@@ -185,6 +189,7 @@ export function registerContractHandlers(): void {
         } else {
           refreshContractFts(row.id)
         }
+        logChange(payload._actor ?? null, 'contract', row.id, 'create', { snapshot: row })
         notifyContractCreated(db, row).catch(() => {})
         return { success: true, data: row }
       } catch (err: any) {
@@ -196,18 +201,27 @@ export function registerContractHandlers(): void {
   // Update contract
   ipcMain.handle(
     'contracts:update',
-    async (_e, payload: Partial<Contract> & { id: number }): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      payload: Partial<Contract> & { id: number; _actor?: AuditActor }
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
         // Fetch current contract for notification context before updating
         const current = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(payload.id) as Contract | undefined
-        const fields = Object.keys(payload).filter((k) => k !== 'id')
+        const fields = Object.keys(payload).filter((k) => k !== 'id' && k !== '_actor')
         const sets = fields.map((f) => `${f} = ?`).join(', ')
         const values = fields.map((f) => (payload as any)[f])
         db.prepare(`UPDATE contracts SET ${sets} WHERE id = ?`).run(...values, payload.id)
         if (current) {
+          const after: Record<string, unknown> = {}
+          for (const f of fields) after[f] = (payload as any)[f]
+          const diff = computeDiff(current as any, after)
+          if (Object.keys(diff).length > 0) {
+            logChange(payload._actor ?? null, 'contract', payload.id, 'update', diff)
+          }
           notifyContractUpdated(db, current, fields).catch(() => {})
         }
         // If file_path changed to a new PDF, re-extract text; otherwise refresh other fields.
@@ -230,22 +244,31 @@ export function registerContractHandlers(): void {
   )
 
   // Delete contract
-  ipcMain.handle('contracts:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
-    try {
-      const db = getDb()
-      const contract = db
-        .prepare('SELECT vendor_name, department_id, branch_id FROM contracts WHERE id = ?')
-        .get(id) as { vendor_name: string; department_id: number | null; branch_id: number | null } | undefined
-      db.prepare('DELETE FROM contracts WHERE id = ?').run(id)
-      removeContractFromFts(id)
-      if (contract) {
-        notifyContractDeleted(db, contract.vendor_name, contract.department_id, contract.branch_id).catch(() => {})
+  ipcMain.handle(
+    'contracts:delete',
+    async (
+      _e,
+      payload: number | { id: number; _actor?: AuditActor }
+    ): Promise<IpcResponse<void>> => {
+      try {
+        const db = getDb()
+        const id = typeof payload === 'number' ? payload : payload.id
+        const actor = typeof payload === 'number' ? null : payload._actor ?? null
+        const contract = db
+          .prepare('SELECT * FROM contracts WHERE id = ?')
+          .get(id) as Contract | undefined
+        db.prepare('DELETE FROM contracts WHERE id = ?').run(id)
+        removeContractFromFts(id)
+        if (contract) {
+          logChange(actor, 'contract', id, 'delete', { snapshot: contract })
+          notifyContractDeleted(db, contract.vendor_name, contract.department_id, contract.branch_id).catch(() => {})
+        }
+        return { success: true }
+      } catch (err: any) {
+        return { success: false, error: err.message }
       }
-      return { success: true }
-    } catch (err: any) {
-      return { success: false, error: err.message }
     }
-  })
+  )
 
   // Full-text search across vendor/POC/notes/extracted PDF text.
   // Returns matching contracts with a preview snippet and the same role-scope
@@ -466,6 +489,14 @@ export function registerContractHandlers(): void {
         const row = db
           .prepare('SELECT * FROM renewal_history WHERE id = ?')
           .get(result.lastInsertRowid) as RenewalHistory
+        logChange(null, 'renewal', row.id, 'create', { snapshot: row })
+        logChange(null, 'contract', payload.contract_id, 'update', {
+          renewal_logged: {
+            id: row.id,
+            date: row.renewal_date,
+            cost_delta: row.new_cost - row.prev_cost
+          }
+        })
         return { success: true, data: row }
       } catch (err: any) {
         return { success: false, error: err.message }
