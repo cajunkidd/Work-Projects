@@ -49,7 +49,7 @@ declare global {
       }
       contracts: {
         list: (opts?: any) => Promise<IpcResponse<Contract[]>>
-        get: (id: number) => Promise<IpcResponse<Contract>>
+        get: (id: number, opts?: { role?: string }) => Promise<IpcResponse<Contract>>
         create: (payload: any) => Promise<IpcResponse<Contract>>
         update: (payload: any) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>

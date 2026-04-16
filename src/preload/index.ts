@@ -35,7 +35,7 @@ contextBridge.exposeInMainWorld('api', {
   // Contracts
   contracts: {
     list: (opts?: any) => ipcRenderer.invoke('contracts:list', opts),
-    get: (id: number) => ipcRenderer.invoke('contracts:get', id),
+    get: (id: number, opts?: any) => ipcRenderer.invoke('contracts:get', id, opts),
     create: (payload: any) => ipcRenderer.invoke('contracts:create', payload),
     update: (payload: any) => ipcRenderer.invoke('contracts:update', payload),
     delete: (id: number) => ipcRenderer.invoke('contracts:delete', id),

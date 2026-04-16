@@ -70,9 +70,11 @@ export default function ContractDetailPage() {
   const [competitorForm, setCompetitorForm] = useState({ competitor_vendor: '', offering_name: '', price: '', notes: '' })
 
   useEffect(() => {
-    window.api.contracts.get(contractId).then((res) => {
-      if (res.success && res.data) setContract(res.data)
-    })
+    window.api.contracts
+      .get(contractId, user ? { role: user.role } : undefined)
+      .then((res) => {
+        if (res.success && res.data) setContract(res.data)
+      })
     window.api.lineItems.list(contractId).then((res) => {
       if (res.success && res.data) setLineItems(res.data)
     })

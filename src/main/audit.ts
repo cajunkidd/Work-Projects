@@ -114,7 +114,7 @@ export function registerAuditHandlers(): void {
     'audit:entity',
     async (
       _e,
-      payload: { entity_type: AuditEntityType; entity_id: number; limit?: number }
+      payload: { entity_type: AuditEntityType; entity_id: number; limit?: number; role?: string }
     ): Promise<IpcResponse<AuditLogEntry[]>> => {
       try {
         const rows = getDb()
@@ -125,6 +125,36 @@ export function registerAuditHandlers(): void {
              LIMIT ?`
           )
           .all(payload.entity_type, payload.entity_id, payload.limit ?? 200) as AuditLogEntry[]
+        // Redact snapshot values for restricted roles so the audit log
+        // doesn't leak fields the user isn't supposed to see.
+        if (payload.role && payload.role !== 'super_admin') {
+          const HIDDEN: Record<string, string[]> = {
+            director: ['poc_phone'],
+            store_manager: ['poc_email', 'poc_phone', 'total_cost', 'file_path']
+          }
+          const fieldsToRedact = HIDDEN[payload.role] ?? []
+          if (fieldsToRedact.length > 0) {
+            for (const row of rows) {
+              try {
+                const parsed = JSON.parse(row.diff_json)
+                let changed = false
+                // Redact { field: { from, to } } entries
+                for (const f of fieldsToRedact) {
+                  if (f in parsed) {
+                    parsed[f] = { from: '[hidden]', to: '[hidden]' }
+                    changed = true
+                  }
+                  // Also redact inside snapshot objects
+                  if (parsed.snapshot && f in parsed.snapshot) {
+                    parsed.snapshot[f] = '[hidden]'
+                    changed = true
+                  }
+                }
+                if (changed) row.diff_json = JSON.stringify(parsed)
+              } catch { /* skip malformed JSON */ }
+            }
+          }
+        }
         return { success: true, data: rows }
       } catch (err: any) {
         return { success: false, error: err.message }
