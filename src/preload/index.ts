@@ -129,6 +129,21 @@ contextBridge.exposeInMainWorld('api', {
     myQueue: (user_id: number) => ipcRenderer.invoke('approvals:myQueue', user_id)
   },
 
+  // AI (Anthropic) — clause extraction, connectivity test
+  ai: {
+    testConnection: () => ipcRenderer.invoke('ai:testConnection'),
+    extractClauses: (contract_id: number) => ipcRenderer.invoke('ai:extractClauses', contract_id),
+    getClauses: (contract_id: number) => ipcRenderer.invoke('ai:getClauses', contract_id)
+  },
+
+  // Clause library
+  clauses: {
+    list: (category?: string) => ipcRenderer.invoke('clauses:list', category),
+    create: (payload: any) => ipcRenderer.invoke('clauses:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('clauses:update', payload),
+    delete: (id: number) => ipcRenderer.invoke('clauses:delete', id)
+  },
+
   // Settings & Branding
   settings: {
     get: () => ipcRenderer.invoke('settings:get'),

@@ -175,6 +175,7 @@ function runMigrations(): void {
   runV9Migration()
   runV10Migration()
   runV11Migration()
+  runV12Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -562,6 +563,27 @@ function runV11Migration(): void {
   `)
 
   db.pragma('user_version = 11')
+}
+
+// V12: Reusable clause library for the contract builder
+function runV12Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 12) return
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS clause_library (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      category TEXT NOT NULL DEFAULT 'general',
+      body_html TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      approved INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_clause_library_category ON clause_library(category);
+  `)
+
+  db.pragma('user_version = 12')
 }
 
 export function updateContractStatuses(): void {

@@ -73,7 +73,7 @@ export default function AssetsPage() {
         if (!map.has(a.branch_id)) {
           map.set(a.branch_id, { ...EMPTY_COUNTS })
         }
-        map.get(a.branch_id)![a.asset_type] = a.count
+        map.get(a.branch_id)![a.asset_type as AssetType] = a.count
       }
       setDraft(map)
       setDirty(false)

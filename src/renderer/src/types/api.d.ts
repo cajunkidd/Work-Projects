@@ -45,6 +45,7 @@ declare global {
         list: () => Promise<IpcResponse<Budget[]>>
         upsert: (payload: any) => Promise<IpcResponse<void>>
         summaries: (fiscal_year: number, filter?: { role: string; department_ids: number[]; branch_ids: number[] }) => Promise<IpcResponse<BudgetSummary[]>>
+        uploadFile: () => Promise<IpcResponse<any>>
       }
       contracts: {
         list: (opts?: any) => Promise<IpcResponse<Contract[]>>
@@ -53,8 +54,21 @@ declare global {
         update: (payload: any) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>
         uploadFile: () => Promise<IpcResponse<any>>
+        parseImport: () => Promise<IpcResponse<any[]>>
+        bulkCreate: (rows: any[]) => Promise<IpcResponse<any>>
         searchFullText: (opts: any) => Promise<IpcResponse<(Contract & { snippet: string })[]>>
         reextractText: (id: number) => Promise<IpcResponse<{ length: number }>>
+      }
+      contractCreation: {
+        saveTemplate: (payload: any) => Promise<IpcResponse<any>>
+        uploadTemplate: (payload?: any) => Promise<IpcResponse<any>>
+        listTemplates: () => Promise<IpcResponse<any[]>>
+        deleteTemplate: (id: number) => Promise<IpcResponse<void>>
+        generatePdf: (html: string, title: string) => Promise<IpcResponse<any>>
+        send: (payload: any) => Promise<IpcResponse<any>>
+        listRequests: () => Promise<IpcResponse<any[]>>
+        refreshStatus: (requestId: number) => Promise<IpcResponse<any>>
+        testDocumenso: () => Promise<IpcResponse<any>>
       }
       obligations: {
         list: (contract_id: number) => Promise<IpcResponse<any[]>>
@@ -91,6 +105,17 @@ declare global {
         cancel: (payload: any) => Promise<IpcResponse<void>>
         forContract: (contract_id: number) => Promise<IpcResponse<any[]>>
         myQueue: (user_id: number) => Promise<IpcResponse<any[]>>
+      }
+      ai: {
+        testConnection: () => Promise<IpcResponse<any>>
+        extractClauses: (contract_id: number) => Promise<IpcResponse<any>>
+        getClauses: (contract_id: number) => Promise<IpcResponse<any>>
+      }
+      clauses: {
+        list: (category?: string) => Promise<IpcResponse<any[]>>
+        create: (payload: any) => Promise<IpcResponse<any>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        delete: (id: number) => Promise<IpcResponse<void>>
       }
       lineItems: {
         list: (contract_id: number) => Promise<IpcResponse<ContractLineItem[]>>
@@ -129,6 +154,30 @@ declare global {
         uploadLogo: () => Promise<IpcResponse<string>>
         pickDbFolder: () => Promise<IpcResponse<string>>
         extractColors: (imagePath: string) => Promise<IpcResponse<{ primary: string; secondary: string; palette: string[] }>>
+        testEmail: (toEmail: string) => Promise<IpcResponse<void>>
+      }
+      assets: {
+        list: () => Promise<IpcResponse<any[]>>
+        save: (rows: any[]) => Promise<IpcResponse<void>>
+        importFile: () => Promise<IpcResponse<any>>
+      }
+      exports: {
+        invoices: (data: any[]) => Promise<IpcResponse<any>>
+        contractsList: (data: any[]) => Promise<IpcResponse<any>>
+        contractDetail: (payload: any) => Promise<IpcResponse<any>>
+      }
+      reports: {
+        overview: () => Promise<IpcResponse<any>>
+        vendorSpend: () => Promise<IpcResponse<any>>
+        monthlyTrend: () => Promise<IpcResponse<any>>
+        renewals: () => Promise<IpcResponse<any>>
+        budgetVsActual: (fiscal_year: number) => Promise<IpcResponse<any>>
+        invoiceSummary: () => Promise<IpcResponse<any>>
+        spendByDept: () => Promise<IpcResponse<any>>
+        spendByBranch: () => Promise<IpcResponse<any>>
+        contractList: () => Promise<IpcResponse<any>>
+        export: (payload: any) => Promise<IpcResponse<any>>
+        email: (payload: any) => Promise<IpcResponse<any>>
       }
       gmail: {
         getAuthUrl: () => Promise<IpcResponse<string>>

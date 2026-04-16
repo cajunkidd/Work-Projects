@@ -1,6 +1,15 @@
 // ─── Users & Auth ───────────────────────────────────────────────────────────
 
-export type UserRole = 'super_admin' | 'director' | 'store_manager'
+// Canonical role names. Legacy names ('admin' | 'editor' | 'viewer') are still
+// accepted by useAuthStore.can() and appear in legacy RoleGuard calls, so the
+// type admits them as well to keep the renderer tree type-safe.
+export type UserRole =
+  | 'super_admin'
+  | 'director'
+  | 'store_manager'
+  | 'admin'
+  | 'editor'
+  | 'viewer'
 
 export interface User {
   id: number
@@ -226,6 +235,9 @@ export interface AppSettings {
   // E-Signature (Documenso)
   documenso_url?: string
   documenso_api_key?: string
+  // AI (Anthropic Claude)
+  anthropic_api_key?: string
+  anthropic_model?: string
 }
 
 // ─── Contract Builder / E-Signature ─────────────────────────────────────────

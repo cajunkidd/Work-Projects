@@ -22,6 +22,7 @@ import HistoryTab from '../components/contracts/HistoryTab'
 import ApprovalsTab from '../components/contracts/ApprovalsTab'
 import ContractCustomFields from '../components/contracts/ContractCustomFields'
 import ContractTags from '../components/contracts/ContractTags'
+import AiClausesPanel from '../components/contracts/AiClausesPanel'
 
 const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Obligations', 'Approvals', 'Notes', 'Projects', 'Competitors', 'History']
 
@@ -355,6 +356,8 @@ export default function ContractDetailPage() {
             <h3 className="text-white font-semibold mb-3">Custom Fields</h3>
             <ContractCustomFields contractId={contractId} />
           </Card>
+
+          <AiClausesPanel contractId={contractId} />
         </div>
       )}
 
