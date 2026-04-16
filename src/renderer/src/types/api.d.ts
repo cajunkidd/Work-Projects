@@ -191,6 +191,7 @@ declare global {
       dashboard: {
         spendTrend: (opts: any) => Promise<IpcResponse<{ month: string; amount: number }[]>>
         upcomingRenewals: () => Promise<IpcResponse<any[]>>
+        savingsTotal: (fiscal_year: number) => Promise<IpcResponse<number>>
       }
       allocations: {
         list: (contract_id: number) => Promise<IpcResponse<ContractAllocation[]>>

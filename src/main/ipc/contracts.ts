@@ -528,12 +528,24 @@ export function registerContractHandlers(): void {
         const row = db
           .prepare('SELECT * FROM renewal_history WHERE id = ?')
           .get(result.lastInsertRowid) as RenewalHistory
+
+        // If cost went down, log the savings
+        const savings = row.prev_cost - row.new_cost
+        if (savings > 0) {
+          const fy = new Date(row.renewal_date).getFullYear()
+          db.prepare(
+            `INSERT INTO savings_log (contract_id, renewal_id, renewal_date, amount, fiscal_year)
+             VALUES (?, ?, ?, ?, ?)`
+          ).run(payload.contract_id, row.id, row.renewal_date, savings, fy)
+        }
+
         logChange(null, 'renewal', row.id, 'create', { snapshot: row })
         logChange(null, 'contract', payload.contract_id, 'update', {
           renewal_logged: {
             id: row.id,
             date: row.renewal_date,
-            cost_delta: row.new_cost - row.prev_cost
+            cost_delta: row.new_cost - row.prev_cost,
+            savings: savings > 0 ? savings : 0
           }
         })
         return { success: true, data: row }

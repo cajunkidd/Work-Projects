@@ -259,6 +259,7 @@ export default function DashboardPage() {
   const [projectCounts, setProjectCounts] = useState({ active: 0, on_hold: 0, completed: 0 })
   const [upcomingObligations, setUpcomingObligations] = useState<UpcomingObligation[]>([])
   const [myApprovalQueue, setMyApprovalQueue] = useState<any[]>([])
+  const [savingsTotal, setSavingsTotal] = useState(0)
   const [trendChart, setTrendChart] = useState<'area' | 'bar' | 'line'>('area')
   const [statusChart, setStatusChart] = useState<'donut' | 'bar' | 'radial'>('donut')
   const year = new Date().getFullYear()
@@ -336,6 +337,10 @@ export default function DashboardPage() {
     window.api.approvals.myQueue(user.id).then((res: any) => {
       if (res.success && res.data) setMyApprovalQueue(res.data)
     })
+
+    window.api.dashboard.savingsTotal(year).then((res: any) => {
+      if (res.success && res.data !== undefined) setSavingsTotal(res.data)
+    })
   }, [selectedDeptId, year, user])
 
   // Status breakdown for pie chart
@@ -388,7 +393,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Stats */}
-        <div className="md:col-span-9 grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="md:col-span-9 grid grid-cols-2 md:grid-cols-5 gap-4">
           {[
             { label: 'Total Contracts', value: contracts.length, sub: 'all time' },
             {
@@ -405,6 +410,11 @@ export default function DashboardPage() {
               label: 'Annual Spend',
               value: fmt(contracts.reduce((s, c) => s + (c.annual_cost || 0), 0)),
               sub: 'active contracts'
+            },
+            {
+              label: `Savings FY${year}`,
+              value: fmt(savingsTotal),
+              sub: 'negotiated savings'
             }
           ].map((stat) => (
             <Card key={stat.label}>

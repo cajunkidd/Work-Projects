@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import path from 'path'
 import { pathToFileURL } from 'url'
-import { initDatabase, updateContractStatuses } from './database'
+import { initDatabase, getDb, updateContractStatuses } from './database'
 import { registerUserHandlers } from './ipc/users'
 import { registerBudgetHandlers } from './ipc/budget'
 import { registerContractHandlers } from './ipc/contracts'
@@ -97,6 +97,23 @@ app.whenReady().then(() => {
   ipcMain.handle('scheduler:upcomingRenewals', () => {
     return { success: true, data: getUpcomingRenewals() }
   })
+
+  // Savings tracker: total savings for a fiscal year
+  ipcMain.handle(
+    'dashboard:savingsTotal',
+    (_e, fiscal_year: number) => {
+      try {
+        const row = getDb()
+          .prepare(
+            `SELECT COALESCE(SUM(amount), 0) as total FROM savings_log WHERE fiscal_year = ?`
+          )
+          .get(fiscal_year) as { total: number }
+        return { success: true, data: row.total }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
 
   // Update contract statuses on startup
   updateContractStatuses()

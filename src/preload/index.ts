@@ -168,7 +168,8 @@ contextBridge.exposeInMainWorld('api', {
   // Dashboard
   dashboard: {
     spendTrend: (opts: any) => ipcRenderer.invoke('dashboard:spendTrend', opts),
-    upcomingRenewals: () => ipcRenderer.invoke('scheduler:upcomingRenewals')
+    upcomingRenewals: () => ipcRenderer.invoke('scheduler:upcomingRenewals'),
+    savingsTotal: (fiscal_year: number) => ipcRenderer.invoke('dashboard:savingsTotal', fiscal_year)
   },
 
   // IT Assets
