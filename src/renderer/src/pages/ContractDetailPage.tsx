@@ -17,8 +17,13 @@ import type {
   ContractAllocation
 } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
+import ObligationsTab from '../components/contracts/ObligationsTab'
+import HistoryTab from '../components/contracts/HistoryTab'
+import ApprovalsTab from '../components/contracts/ApprovalsTab'
+import ContractCustomFields from '../components/contracts/ContractCustomFields'
+import ContractTags from '../components/contracts/ContractTags'
 
-const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Notes', 'Projects', 'Competitors']
+const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Obligations', 'Approvals', 'Notes', 'Projects', 'Competitors', 'History']
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -317,26 +322,40 @@ export default function ContractDetailPage() {
 
       {/* Tab content */}
       {activeTab === 'Overview' && (
-        <Card>
-          <div className="grid grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <h3 className="text-white font-semibold">Vendor Contact</h3>
-              <div className="space-y-2 text-sm">
-                <div><span className="text-slate-400">Name: </span><span className="text-white">{contract.poc_name || '—'}</span></div>
-                <div><span className="text-slate-400">Email: </span><span className="text-white">{contract.poc_email || '—'}</span></div>
-                <div><span className="text-slate-400">Phone: </span><span className="text-white">{contract.poc_phone || '—'}</span></div>
+        <div className="space-y-4">
+          <Card>
+            <div className="grid grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold">Vendor Contact</h3>
+                <div className="space-y-2 text-sm">
+                  <div><span className="text-slate-400">Name: </span><span className="text-white">{contract.poc_name || '—'}</span></div>
+                  <div><span className="text-slate-400">Email: </span><span className="text-white">{contract.poc_email || '—'}</span></div>
+                  <div><span className="text-slate-400">Phone: </span><span className="text-white">{contract.poc_phone || '—'}</span></div>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <h3 className="text-white font-semibold">Contract File</h3>
+                {contract.file_path ? (
+                  <p className="text-slate-300 text-sm truncate">{contract.file_path}</p>
+                ) : (
+                  <p className="text-slate-400 text-sm">No file attached</p>
+                )}
               </div>
             </div>
-            <div className="space-y-3">
-              <h3 className="text-white font-semibold">Contract File</h3>
-              {contract.file_path ? (
-                <p className="text-slate-300 text-sm truncate">{contract.file_path}</p>
-              ) : (
-                <p className="text-slate-400 text-sm">No file attached</p>
-              )}
+          </Card>
+
+          <Card>
+            <h3 className="text-white font-semibold mb-3">Tags</h3>
+            <div className="relative">
+              <ContractTags contractId={contractId} />
             </div>
-          </div>
-        </Card>
+          </Card>
+
+          <Card>
+            <h3 className="text-white font-semibold mb-3">Custom Fields</h3>
+            <ContractCustomFields contractId={contractId} />
+          </Card>
+        </div>
       )}
 
       {activeTab === 'Line Items' && (
@@ -456,6 +475,12 @@ export default function ContractDetailPage() {
           </div>
         </div>
       )}
+
+      {activeTab === 'Obligations' && <ObligationsTab contractId={contractId} />}
+
+      {activeTab === 'Approvals' && <ApprovalsTab contractId={contractId} />}
+
+      {activeTab === 'History' && <HistoryTab contractId={contractId} />}
 
       {activeTab === 'Notes' && (
         <div className="space-y-4">

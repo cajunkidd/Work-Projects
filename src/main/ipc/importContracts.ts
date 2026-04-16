@@ -1,7 +1,7 @@
 import { ipcMain, dialog } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import { getDb } from '../database'
+import { getDb, refreshContractFts } from '../database'
 import type { IpcResponse } from '../../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -544,6 +544,8 @@ export function registerImportHandlers(): void {
         VALUES (?, ?, 'Import', datetime('now'))
       `)
 
+      const insertedIds: number[] = []
+
       const bulkTx = db.transaction((rows: ParsedImportResult[]) => {
         for (let i = 0; i < rows.length; i++) {
           const r = rows[i]
@@ -568,6 +570,7 @@ export function registerImportHandlers(): void {
               null
             )
             const contractId = result.lastInsertRowid as number
+            insertedIds.push(contractId)
 
             for (const li of r.line_items ?? []) {
               insertLineItem.run(contractId, li.description, li.quantity, li.unit_price, li.total_price)
@@ -583,6 +586,9 @@ export function registerImportHandlers(): void {
       })
 
       bulkTx(rows)
+
+      // Index all newly imported contracts in FTS (outside the transaction).
+      for (const id of insertedIds) refreshContractFts(id)
 
       return { success: true, data: { created, errors } }
     }

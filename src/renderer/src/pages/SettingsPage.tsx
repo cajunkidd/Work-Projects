@@ -8,6 +8,7 @@ import Select from '../components/ui/Select'
 import Modal from '../components/ui/Modal'
 import RoleGuard from '../components/layout/RoleGuard'
 import Badge from '../components/ui/Badge'
+import CustomFieldsSection from '../components/settings/CustomFieldsSection'
 import type { Department, Branch, User } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -691,6 +692,11 @@ export default function SettingsPage() {
             </div>
           </Card>
         </section>
+      </RoleGuard>
+
+      {/* ─── Custom Fields & Tags ─── */}
+      <RoleGuard minRole="super_admin">
+        <CustomFieldsSection />
       </RoleGuard>
 
       {/* ─── Network DB ─── */}

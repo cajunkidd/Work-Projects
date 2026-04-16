@@ -41,7 +41,9 @@ contextBridge.exposeInMainWorld('api', {
     delete: (id: number) => ipcRenderer.invoke('contracts:delete', id),
     uploadFile: () => ipcRenderer.invoke('contracts:uploadFile'),
     parseImport: () => ipcRenderer.invoke('contracts:parseImport'),
-    bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows)
+    bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows),
+    searchFullText: (opts: any) => ipcRenderer.invoke('contracts:searchFullText', opts),
+    reextractText: (id: number) => ipcRenderer.invoke('contracts:reextractText', id)
   },
   lineItems: {
     list: (contract_id: number) => ipcRenderer.invoke('lineItems:list', contract_id),
@@ -81,6 +83,50 @@ contextBridge.exposeInMainWorld('api', {
     list: (contract_id: number) => ipcRenderer.invoke('notes:list', contract_id),
     create: (payload: any) => ipcRenderer.invoke('notes:create', payload),
     delete: (id: number) => ipcRenderer.invoke('notes:delete', id)
+  },
+
+  // Obligations
+  obligations: {
+    list: (contract_id: number) => ipcRenderer.invoke('obligations:list', contract_id),
+    create: (payload: any) => ipcRenderer.invoke('obligations:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('obligations:update', payload),
+    complete: (id: number) => ipcRenderer.invoke('obligations:complete', id),
+    delete: (id: number) => ipcRenderer.invoke('obligations:delete', id),
+    upcoming: (opts?: any) => ipcRenderer.invoke('obligations:upcoming', opts)
+  },
+
+  // Audit log
+  audit: {
+    setActor: (actor: any) => ipcRenderer.invoke('audit:setActor', actor),
+    entity: (payload: any) => ipcRenderer.invoke('audit:entity', payload),
+    recent: (limit?: number) => ipcRenderer.invoke('audit:recent', limit)
+  },
+
+  // Custom fields + tags
+  customFields: {
+    list: (entity_type?: string) => ipcRenderer.invoke('customFields:list', entity_type),
+    create: (payload: any) => ipcRenderer.invoke('customFields:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('customFields:update', payload),
+    delete: (id: number) => ipcRenderer.invoke('customFields:delete', id),
+    values: (payload: any) => ipcRenderer.invoke('customFields:values', payload),
+    setValue: (payload: any) => ipcRenderer.invoke('customFields:setValue', payload)
+  },
+  tags: {
+    list: () => ipcRenderer.invoke('tags:list'),
+    create: (payload: any) => ipcRenderer.invoke('tags:create', payload),
+    delete: (id: number) => ipcRenderer.invoke('tags:delete', id),
+    forEntity: (payload: any) => ipcRenderer.invoke('tags:forEntity', payload),
+    attach: (payload: any) => ipcRenderer.invoke('tags:attach', payload),
+    detach: (payload: any) => ipcRenderer.invoke('tags:detach', payload)
+  },
+
+  // Approval workflow
+  approvals: {
+    create: (payload: any) => ipcRenderer.invoke('approvals:create', payload),
+    decide: (payload: any) => ipcRenderer.invoke('approvals:decide', payload),
+    cancel: (payload: any) => ipcRenderer.invoke('approvals:cancel', payload),
+    forContract: (contract_id: number) => ipcRenderer.invoke('approvals:forContract', contract_id),
+    myQueue: (user_id: number) => ipcRenderer.invoke('approvals:myQueue', user_id)
   },
 
   // Settings & Branding

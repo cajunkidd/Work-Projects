@@ -1,7 +1,14 @@
 import { ipcMain, dialog } from 'electron'
 import fs from 'fs'
 import path from 'path'
-import { getDb } from '../database'
+import {
+  getDb,
+  refreshContractFts,
+  removeContractFromFts,
+  setContractExtractedText,
+  rebuildContractFtsIfEmpty
+} from '../database'
+import { logChange, computeDiff, type AuditActor } from '../audit'
 import {
   notifyContractCreated,
   notifyContractUpdated,
@@ -13,6 +20,17 @@ import type {
   ContractLineItem,
   RenewalHistory
 } from '../../shared/types'
+
+async function extractPdfText(filePath: string): Promise<string> {
+  try {
+    const pdfParse = await import('pdf-parse')
+    const buffer = fs.readFileSync(filePath)
+    const data = await pdfParse.default(buffer)
+    return data.text || ''
+  } catch {
+    return ''
+  }
+}
 
 // Lazy imports for parsing (native modules)
 async function parsePdf(filePath: string): Promise<string> {
@@ -133,7 +151,10 @@ export function registerContractHandlers(): void {
   // Create contract
   ipcMain.handle(
     'contracts:create',
-    async (_e, payload: Omit<Contract, 'id' | 'created_at'>): Promise<IpcResponse<Contract>> => {
+    async (
+      _e,
+      payload: Omit<Contract, 'id' | 'created_at'> & { _actor?: AuditActor }
+    ): Promise<IpcResponse<Contract>> => {
       try {
         const db = getDb()
         const result = db
@@ -161,6 +182,14 @@ export function registerContractHandlers(): void {
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(result.lastInsertRowid) as Contract
+        // Index in FTS (and extract text if a PDF was attached)
+        if (row.file_path && path.extname(row.file_path).toLowerCase() === '.pdf') {
+          const text = await extractPdfText(row.file_path)
+          setContractExtractedText(row.id, text)
+        } else {
+          refreshContractFts(row.id)
+        }
+        logChange(payload._actor ?? null, 'contract', row.id, 'create', { snapshot: row })
         notifyContractCreated(db, row).catch(() => {})
         return { success: true, data: row }
       } catch (err: any) {
@@ -172,19 +201,40 @@ export function registerContractHandlers(): void {
   // Update contract
   ipcMain.handle(
     'contracts:update',
-    async (_e, payload: Partial<Contract> & { id: number }): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      payload: Partial<Contract> & { id: number; _actor?: AuditActor }
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
         // Fetch current contract for notification context before updating
         const current = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(payload.id) as Contract | undefined
-        const fields = Object.keys(payload).filter((k) => k !== 'id')
+        const fields = Object.keys(payload).filter((k) => k !== 'id' && k !== '_actor')
         const sets = fields.map((f) => `${f} = ?`).join(', ')
         const values = fields.map((f) => (payload as any)[f])
         db.prepare(`UPDATE contracts SET ${sets} WHERE id = ?`).run(...values, payload.id)
         if (current) {
+          const after: Record<string, unknown> = {}
+          for (const f of fields) after[f] = (payload as any)[f]
+          const diff = computeDiff(current as any, after)
+          if (Object.keys(diff).length > 0) {
+            logChange(payload._actor ?? null, 'contract', payload.id, 'update', diff)
+          }
           notifyContractUpdated(db, current, fields).catch(() => {})
+        }
+        // If file_path changed to a new PDF, re-extract text; otherwise refresh other fields.
+        const newFilePath = (payload as any).file_path as string | undefined
+        if (
+          fields.includes('file_path') &&
+          newFilePath &&
+          path.extname(newFilePath).toLowerCase() === '.pdf'
+        ) {
+          const text = await extractPdfText(newFilePath)
+          setContractExtractedText(payload.id, text)
+        } else {
+          refreshContractFts(payload.id)
         }
         return { success: true }
       } catch (err: any) {
@@ -194,21 +244,125 @@ export function registerContractHandlers(): void {
   )
 
   // Delete contract
-  ipcMain.handle('contracts:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
-    try {
-      const db = getDb()
-      const contract = db
-        .prepare('SELECT vendor_name, department_id, branch_id FROM contracts WHERE id = ?')
-        .get(id) as { vendor_name: string; department_id: number | null; branch_id: number | null } | undefined
-      db.prepare('DELETE FROM contracts WHERE id = ?').run(id)
-      if (contract) {
-        notifyContractDeleted(db, contract.vendor_name, contract.department_id, contract.branch_id).catch(() => {})
+  ipcMain.handle(
+    'contracts:delete',
+    async (
+      _e,
+      payload: number | { id: number; _actor?: AuditActor }
+    ): Promise<IpcResponse<void>> => {
+      try {
+        const db = getDb()
+        const id = typeof payload === 'number' ? payload : payload.id
+        const actor = typeof payload === 'number' ? null : payload._actor ?? null
+        const contract = db
+          .prepare('SELECT * FROM contracts WHERE id = ?')
+          .get(id) as Contract | undefined
+        db.prepare('DELETE FROM contracts WHERE id = ?').run(id)
+        removeContractFromFts(id)
+        if (contract) {
+          logChange(actor, 'contract', id, 'delete', { snapshot: contract })
+          notifyContractDeleted(db, contract.vendor_name, contract.department_id, contract.branch_id).catch(() => {})
+        }
+        return { success: true }
+      } catch (err: any) {
+        return { success: false, error: err.message }
       }
-      return { success: true }
-    } catch (err: any) {
-      return { success: false, error: err.message }
     }
-  })
+  )
+
+  // Full-text search across vendor/POC/notes/extracted PDF text.
+  // Returns matching contracts with a preview snippet and the same role-scope
+  // rules as contracts:list.
+  ipcMain.handle(
+    'contracts:searchFullText',
+    async (
+      _e,
+      opts: {
+        query: string
+        role?: string
+        allowed_department_ids?: number[]
+        allowed_branch_ids?: number[]
+      }
+    ): Promise<IpcResponse<(Contract & { snippet: string })[]>> => {
+      try {
+        const db = getDb()
+        // Ensure pre-existing contracts are indexed the first time this is called.
+        rebuildContractFtsIfEmpty()
+        const q = (opts.query || '').trim()
+        if (!q) return { success: true, data: [] }
+
+        // Escape FTS5 special syntax by quoting each term and AND-ing them.
+        const sanitized = q
+          .split(/\s+/)
+          .filter(Boolean)
+          .map((t) => '"' + t.replace(/"/g, '""') + '"')
+          .join(' AND ')
+
+        const params: (string | number)[] = [sanitized]
+        let scopeClause = ''
+        if (opts.role === 'store_manager') {
+          const ids = opts.allowed_branch_ids ?? []
+          if (ids.length === 0) return { success: true, data: [] }
+          scopeClause = ` AND c.branch_id IN (${ids.map(() => '?').join(',')})`
+          params.push(...ids)
+        } else if (opts.role === 'director') {
+          const deptIds = opts.allowed_department_ids ?? []
+          const branchIds = opts.allowed_branch_ids ?? []
+          const clauses: string[] = []
+          if (deptIds.length > 0) {
+            clauses.push(`c.department_id IN (${deptIds.map(() => '?').join(',')})`)
+            params.push(...deptIds)
+          }
+          if (branchIds.length > 0) {
+            clauses.push(`c.branch_id IN (${branchIds.map(() => '?').join(',')})`)
+            params.push(...branchIds)
+          }
+          if (clauses.length === 0) return { success: true, data: [] }
+          scopeClause = ` AND (${clauses.join(' OR ')})`
+        }
+
+        const rows = db
+          .prepare(
+            `SELECT c.*, d.name as department_name, br.name as branch_name,
+               CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal,
+               snippet(contracts_fts, -1, '<mark>', '</mark>', ' … ', 20) as snippet,
+               bm25(contracts_fts) as rank
+             FROM contracts_fts
+             JOIN contracts c ON c.id = contracts_fts.rowid
+             LEFT JOIN departments d ON c.department_id = d.id
+             LEFT JOIN branches br ON c.branch_id = br.id
+             WHERE contracts_fts MATCH ?${scopeClause}
+             ORDER BY rank
+             LIMIT 100`
+          )
+          .all(...params) as (Contract & { snippet: string })[]
+        return { success: true, data: rows }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  // Re-extract text for a contract on demand (e.g. after replacing the file).
+  ipcMain.handle(
+    'contracts:reextractText',
+    async (_e, contract_id: number): Promise<IpcResponse<{ length: number }>> => {
+      try {
+        const db = getDb()
+        const row = db
+          .prepare('SELECT file_path FROM contracts WHERE id = ?')
+          .get(contract_id) as { file_path: string | null } | undefined
+        if (!row?.file_path || path.extname(row.file_path).toLowerCase() !== '.pdf') {
+          return { success: false, error: 'Contract has no attached PDF' }
+        }
+        const text = await extractPdfText(row.file_path)
+        setContractExtractedText(contract_id, text)
+        return { success: true, data: { length: text.length } }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
 
   // Upload contract file (opens dialog)
   ipcMain.handle('contracts:uploadFile', async (): Promise<IpcResponse<{ path: string; text?: string; rows?: Record<string,string>[] }>> => {
@@ -335,6 +489,14 @@ export function registerContractHandlers(): void {
         const row = db
           .prepare('SELECT * FROM renewal_history WHERE id = ?')
           .get(result.lastInsertRowid) as RenewalHistory
+        logChange(null, 'renewal', row.id, 'create', { snapshot: row })
+        logChange(null, 'contract', payload.contract_id, 'update', {
+          renewal_logged: {
+            id: row.id,
+            date: row.renewal_date,
+            cost_delta: row.new_cost - row.prev_cost
+          }
+        })
         return { success: true, data: row }
       } catch (err: any) {
         return { success: false, error: err.message }

@@ -174,6 +174,25 @@ export interface VendorProject {
   description: string
 }
 
+// ─── Contract Obligations ───────────────────────────────────────────────────
+
+export type ObligationStatus = 'pending' | 'completed' | 'overdue' | 'cancelled'
+export type ObligationRecurrence = 'none' | 'monthly' | 'quarterly' | 'annual'
+
+export interface ContractObligation {
+  id: number
+  contract_id: number
+  title: string
+  description: string
+  due_date: string
+  responsible_user_id: number | null
+  responsible_user_name?: string | null
+  status: ObligationStatus
+  recurrence: ObligationRecurrence
+  completed_at: string | null
+  created_at: string
+}
+
 // ─── Vendor Notes ────────────────────────────────────────────────────────────
 
 export interface VendorNote {

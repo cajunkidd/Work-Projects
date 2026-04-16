@@ -53,6 +53,44 @@ declare global {
         update: (payload: any) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>
         uploadFile: () => Promise<IpcResponse<any>>
+        searchFullText: (opts: any) => Promise<IpcResponse<(Contract & { snippet: string })[]>>
+        reextractText: (id: number) => Promise<IpcResponse<{ length: number }>>
+      }
+      obligations: {
+        list: (contract_id: number) => Promise<IpcResponse<any[]>>
+        create: (payload: any) => Promise<IpcResponse<any>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        complete: (id: number) => Promise<IpcResponse<any | null>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+        upcoming: (opts?: any) => Promise<IpcResponse<any[]>>
+      }
+      audit: {
+        setActor: (actor: { user_id: number; user_name: string } | null) => Promise<IpcResponse<void>>
+        entity: (payload: { entity_type: string; entity_id: number; limit?: number }) => Promise<IpcResponse<any[]>>
+        recent: (limit?: number) => Promise<IpcResponse<any[]>>
+      }
+      customFields: {
+        list: (entity_type?: string) => Promise<IpcResponse<any[]>>
+        create: (payload: any) => Promise<IpcResponse<any>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+        values: (payload: any) => Promise<IpcResponse<any[]>>
+        setValue: (payload: any) => Promise<IpcResponse<void>>
+      }
+      tags: {
+        list: () => Promise<IpcResponse<any[]>>
+        create: (payload: any) => Promise<IpcResponse<any>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+        forEntity: (payload: any) => Promise<IpcResponse<any[]>>
+        attach: (payload: any) => Promise<IpcResponse<void>>
+        detach: (payload: any) => Promise<IpcResponse<void>>
+      }
+      approvals: {
+        create: (payload: any) => Promise<IpcResponse<any>>
+        decide: (payload: any) => Promise<IpcResponse<any>>
+        cancel: (payload: any) => Promise<IpcResponse<void>>
+        forContract: (contract_id: number) => Promise<IpcResponse<any[]>>
+        myQueue: (user_id: number) => Promise<IpcResponse<any[]>>
       }
       lineItems: {
         list: (contract_id: number) => Promise<IpcResponse<ContractLineItem[]>>

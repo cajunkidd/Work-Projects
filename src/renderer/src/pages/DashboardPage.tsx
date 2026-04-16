@@ -23,7 +23,12 @@ import { useThemeStore } from '../store/themeStore'
 import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
-import type { BudgetSummary, Contract, Invoice } from '../../../shared/types'
+import type { BudgetSummary, Contract, Invoice, ContractObligation } from '../../../shared/types'
+
+interface UpcomingObligation extends ContractObligation {
+  vendor_name: string
+  days_until_due: number
+}
 
 const STATUS_COLORS = {
   active: '#10b981',
@@ -252,6 +257,8 @@ export default function DashboardPage() {
   const [recentInvoices, setRecentInvoices] = useState<Invoice[]>([])
   const [spendTrend, setSpendTrend] = useState<{ month: string; amount: number }[]>([])
   const [projectCounts, setProjectCounts] = useState({ active: 0, on_hold: 0, completed: 0 })
+  const [upcomingObligations, setUpcomingObligations] = useState<UpcomingObligation[]>([])
+  const [myApprovalQueue, setMyApprovalQueue] = useState<any[]>([])
   const [trendChart, setTrendChart] = useState<'area' | 'bar' | 'line'>('area')
   const [statusChart, setStatusChart] = useState<'donut' | 'bar' | 'radial'>('donut')
   const year = new Date().getFullYear()
@@ -314,6 +321,20 @@ export default function DashboardPage() {
         })
         setProjectCounts(counts)
       }
+    })
+
+    const obligationOpts: any = { days: 60 }
+    if (user.role !== 'super_admin') {
+      obligationOpts.role = user.role
+      obligationOpts.allowed_department_ids = user.department_ids
+      obligationOpts.allowed_branch_ids = user.branch_ids
+    }
+    window.api.obligations.upcoming(obligationOpts).then((res: any) => {
+      if (res.success && res.data) setUpcomingObligations(res.data.slice(0, 8))
+    })
+
+    window.api.approvals.myQueue(user.id).then((res: any) => {
+      if (res.success && res.data) setMyApprovalQueue(res.data)
     })
   }, [selectedDeptId, year, user])
 
@@ -522,10 +543,37 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* Bottom row: Upcoming renewals + recent invoices + projects */}
+      {/* My approval queue (only shown when the user has pending approvals waiting on them) */}
+      {myApprovalQueue.length > 0 && (
+        <Card>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-white font-semibold">Waiting on You · Approvals</p>
+            <span className="text-xs text-amber-400">{myApprovalQueue.length} pending</span>
+          </div>
+          <div className="space-y-1">
+            {myApprovalQueue.map((r) => (
+              <div
+                key={r.id}
+                className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0 cursor-pointer hover:bg-slate-800/40 rounded px-2 -mx-2"
+                onClick={() => navigate(`/contracts/${r.contract_id}`)}
+              >
+                <div>
+                  <p className="text-white text-sm font-medium">{r.vendor_name}</p>
+                  <p className="text-slate-400 text-xs">
+                    Requested by {r.requested_by_name || '—'} · {r.created_at}
+                  </p>
+                </div>
+                <Badge variant="warning">Review</Badge>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Bottom row: Upcoming renewals + obligations + recent invoices + projects */}
       <div className="grid grid-cols-12 gap-4">
         {/* Upcoming renewals */}
-        <Card className="col-span-6">
+        <Card className="col-span-4">
           <p className="text-white font-semibold mb-3">Upcoming Renewals</p>
           {upcomingRenewals.length === 0 ? (
             <p className="text-slate-400 text-sm">No contracts expiring within 120 days</p>
@@ -552,8 +600,37 @@ export default function DashboardPage() {
           )}
         </Card>
 
+        {/* Upcoming obligations */}
+        <Card className="col-span-4">
+          <p className="text-white font-semibold mb-3">Upcoming Obligations</p>
+          {upcomingObligations.length === 0 ? (
+            <p className="text-slate-400 text-sm">No obligations due in the next 60 days</p>
+          ) : (
+            <div className="space-y-2">
+              {upcomingObligations.map((o) => {
+                const d = o.days_until_due ?? 0
+                const variant = d < 0 ? 'danger' : d <= 7 ? 'danger' : d <= 30 ? 'warning' : 'info'
+                const label = d < 0 ? `${-d}d overdue` : d === 0 ? 'today' : `${d}d`
+                return (
+                  <div
+                    key={o.id}
+                    className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0 cursor-pointer hover:bg-slate-800/50 rounded px-2 -mx-2"
+                    onClick={() => navigate(`/contracts/${o.contract_id}`)}
+                  >
+                    <div className="min-w-0">
+                      <p className="text-white text-sm font-medium truncate">{o.title}</p>
+                      <p className="text-slate-400 text-xs truncate">{o.vendor_name}</p>
+                    </div>
+                    <Badge variant={variant}>{label}</Badge>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Card>
+
         {/* Recent invoices */}
-        <Card className="col-span-3">
+        <Card className="col-span-2">
           <p className="text-white font-semibold mb-3">Recent Invoices</p>
           {recentInvoices.length === 0 ? (
             <p className="text-slate-400 text-sm">No invoices</p>
@@ -576,7 +653,7 @@ export default function DashboardPage() {
         </Card>
 
         {/* Projects */}
-        <Card className="col-span-3">
+        <Card className="col-span-2">
           <p className="text-white font-semibold mb-3">Vendor Projects</p>
           <div className="space-y-3">
             {[

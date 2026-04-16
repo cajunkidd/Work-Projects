@@ -83,7 +83,7 @@ export function getUserEmailsToNotify(
 
 // ─── Email sender ─────────────────────────────────────────────────────────────
 
-async function sendEmail(
+export async function sendEmail(
   db: Database,
   to: string[],
   subject: string,
@@ -112,7 +112,7 @@ async function sendEmail(
 
 // ─── HTML email template ──────────────────────────────────────────────────────
 
-function emailTemplate(title: string, rows: { label: string; value: string }[]): string {
+export function emailTemplate(title: string, rows: { label: string; value: string }[]): string {
   const rowsHtml = rows
     .map(
       (r) => `
