@@ -23,6 +23,7 @@ import ApprovalsTab from '../components/contracts/ApprovalsTab'
 import ContractCustomFields from '../components/contracts/ContractCustomFields'
 import ContractTags from '../components/contracts/ContractTags'
 import AiClausesPanel from '../components/contracts/AiClausesPanel'
+import RenegotiationCompareModal from '../components/contracts/RenegotiationCompareModal'
 
 const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Obligations', 'Approvals', 'Notes', 'Projects', 'Competitors', 'History']
 
@@ -50,6 +51,7 @@ export default function ContractDetailPage() {
   const [showNoteModal, setShowNoteModal] = useState(false)
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [showCompetitorModal, setShowCompetitorModal] = useState(false)
+  const [showRenegotiationCompare, setShowRenegotiationCompare] = useState(false)
 
   // Allocations (IT contracts only)
   const [allocations, setAllocations] = useState<ContractAllocation[]>([])
@@ -435,9 +437,16 @@ export default function ContractDetailPage() {
 
       {activeTab === 'Renewals' && (
         <div className="space-y-4">
-          <RoleGuard minRole="editor">
-            <Button onClick={() => setShowRenewalModal(true)}>+ Log Renewal</Button>
-          </RoleGuard>
+          <div className="flex items-center gap-2">
+            <RoleGuard minRole="editor">
+              <Button onClick={() => setShowRenewalModal(true)}>+ Log Renewal</Button>
+            </RoleGuard>
+            {renewals.length > 0 && (
+              <Button variant="secondary" onClick={() => setShowRenegotiationCompare(true)}>
+                Compare Renewals
+              </Button>
+            )}
+          </div>
           {renewalTrendData.length > 1 && (
             <Card>
               <p className="text-white font-semibold mb-4">Cost Trend</p>
@@ -762,6 +771,12 @@ export default function ContractDetailPage() {
           <Button type="submit" className="w-full justify-center">Save Offering</Button>
         </form>
       </Modal>
+
+      <RenegotiationCompareModal
+        open={showRenegotiationCompare}
+        onClose={() => setShowRenegotiationCompare(false)}
+        contractId={contractId}
+      />
     </div>
   )
 }
