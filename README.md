@@ -98,6 +98,17 @@ fetched.
 If GitHub can't be reached, the launcher retries a few times and then falls back
 to launching the current local version rather than failing.
 
+### Silent launch (no console window)
+
+Double-clicking `launch.bat` shows a console window with `[1/4]…[4/4]` progress
+while it updates and builds. If you'd rather it start like a normal app with no
+visible window, double-click **`launch-silent.vbs`** instead — it runs the exact
+same steps hidden. Output is captured to `launch.log` next to it, and if the
+update/build fails you'll get a dialog pointing you to that log.
+
+Tip: right-click `launch-silent.vbs` → **Send to → Desktop (create shortcut)** for
+a clean one-click launcher.
+
 ---
 
 ## Building the Windows Installer

@@ -183,7 +183,10 @@ goto :done
 echo(
 echo Launch aborted. See the message above.
 echo(
-pause
+REM When started by the silent .vbs wrapper there is no visible window,
+REM so skip the pause (which would hang invisibly). The wrapper reports
+REM the failure via a dialog and points to launch.log instead.
+if not "%LAUNCHER_SILENT%"=="1" pause
 endlocal
 exit /b 1
 
