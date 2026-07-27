@@ -69,6 +69,37 @@ To share the database with your team:
 
 ---
 
+## Auto-Updating Launcher (`launch.bat`)
+
+For teams running the app straight from a Git checkout, `launch.bat` is a
+one-click Windows launcher that keeps everyone on the latest version.
+
+Double-click `launch.bat` (or run it from a shortcut). On every start it will:
+
+1. Check GitHub for updates to the current branch
+2. Pull them automatically if any are found
+3. Reinstall dependencies — only if `package-lock.json` changed
+4. Rebuild the app — only if the code actually changed
+5. Launch the app
+
+**Requirements:** [Git](https://git-scm.com/download/win) and
+[Node.js](https://nodejs.org/) must be installed and on the `PATH`, and the app
+must have been obtained via `git clone` (not a downloaded ZIP) so updates can be
+fetched.
+
+**Configuration** — edit the variables at the top of `launch.bat`:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `LAUNCH_MODE` | `prod` | `prod` builds and runs the app; `dev` runs the Vite dev server with hot reload |
+| `BRANCH` | `auto` | Branch to track for updates; `auto` uses the currently checked-out branch |
+| `SKIP_UPDATE` | `0` | Set to `1` to skip the update check for a faster / offline launch |
+
+If GitHub can't be reached, the launcher retries a few times and then falls back
+to launching the current local version rather than failing.
+
+---
+
 ## Building the Windows Installer
 
 ```bash
