@@ -59,6 +59,17 @@ contextBridge.exposeInMainWorld('api', {
     insert: (payload: any) => ipcRenderer.invoke('invoices:insert', payload)
   },
 
+  // GL Codes
+  glCodes: {
+    list: () => ipcRenderer.invoke('glCodes:list'),
+    create: (payload: any) => ipcRenderer.invoke('glCodes:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('glCodes:update', payload),
+    delete: (id: number) => ipcRenderer.invoke('glCodes:delete', id),
+    parseImport: () => ipcRenderer.invoke('glCodes:parseImport'),
+    bulkCreate: (rows: any[]) => ipcRenderer.invoke('glCodes:bulkCreate', rows),
+    assign: (payload: any) => ipcRenderer.invoke('glCodes:assign', payload)
+  },
+
   // Competitors
   competitors: {
     list: (contract_id: number) => ipcRenderer.invoke('competitors:list', contract_id),

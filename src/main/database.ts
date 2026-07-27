@@ -150,6 +150,7 @@ function runMigrations(): void {
   runV3Migration()
   runV4Migration()
   runV5Migration()
+  runV6Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -367,6 +368,35 @@ function runV5Migration(): void {
   `)
 
   db.pragma('user_version = 5')
+}
+
+function runV6Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 6) return
+
+  // Company-wide General Ledger (GL) codes, plus nullable links from
+  // contracts and invoices to the applicable GL code.
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS gl_codes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      code TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL DEFAULT '',
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+  `)
+
+  // Add gl_code_id to contracts / invoices only if not already present.
+  const contractCols = db.prepare(`PRAGMA table_info(contracts)`).all() as { name: string }[]
+  if (!contractCols.some((c) => c.name === 'gl_code_id')) {
+    db.exec(`ALTER TABLE contracts ADD COLUMN gl_code_id INTEGER REFERENCES gl_codes(id) ON DELETE SET NULL`)
+  }
+  const invoiceCols = db.prepare(`PRAGMA table_info(invoices)`).all() as { name: string }[]
+  if (!invoiceCols.some((c) => c.name === 'gl_code_id')) {
+    db.exec(`ALTER TABLE invoices ADD COLUMN gl_code_id INTEGER REFERENCES gl_codes(id) ON DELETE SET NULL`)
+  }
+
+  db.pragma('user_version = 6')
 }
 
 export function updateContractStatuses(): void {

@@ -14,7 +14,7 @@ import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
 import type {
   Contract, ContractLineItem, RenewalHistory, VendorNote, VendorProject, CompetitorOffering,
-  ContractAllocation
+  ContractAllocation, GLCode
 } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 
@@ -38,6 +38,7 @@ export default function ContractDetailPage() {
   const [notes, setNotes] = useState<VendorNote[]>([])
   const [projects, setProjects] = useState<VendorProject[]>([])
   const [competitors, setCompetitors] = useState<CompetitorOffering[]>([])
+  const [glCodes, setGlCodes] = useState<GLCode[]>([])
 
   // Modals
   const [showRenewalModal, setShowRenewalModal] = useState(false)
@@ -89,7 +90,17 @@ export default function ContractDetailPage() {
     window.api.departments.list().then((res) => {
       if (res.success && res.data) setAllDepartments(res.data)
     })
+    window.api.glCodes.list().then((res) => {
+      if (res.success && res.data) setGlCodes(res.data)
+    })
   }, [contractId])
+
+  const assignGlCode = async (glCodeId: number | null) => {
+    if (!contract) return
+    await window.api.glCodes.assign({ entity: 'contract', id: contract.id, gl_code_id: glCodeId })
+    const chosen = glCodes.find((g) => g.id === glCodeId)
+    setContract({ ...contract, gl_code_id: glCodeId, gl_code: chosen?.code })
+  }
 
   const saveLineItems = async () => {
     await window.api.lineItems.upsert(lineItems)
@@ -334,6 +345,32 @@ export default function ContractDetailPage() {
               ) : (
                 <p className="text-slate-400 text-sm">No file attached</p>
               )}
+
+              <h3 className="text-white font-semibold pt-3">GL Code</h3>
+              <RoleGuard
+                minRole="editor"
+                fallback={
+                  <p className="text-sm">
+                    {contract.gl_code
+                      ? <span className="text-white font-mono">{contract.gl_code}</span>
+                      : <span className="text-slate-400">Not assigned</span>}
+                  </p>
+                }
+              >
+                <Select
+                  value={contract.gl_code_id ? String(contract.gl_code_id) : ''}
+                  onChange={(e) => assignGlCode(e.target.value ? parseInt(e.target.value) : null)}
+                  options={[
+                    { value: '', label: '— No GL Code —' },
+                    ...glCodes
+                      .filter((g) => g.is_active || g.id === contract.gl_code_id)
+                      .map((g) => ({ value: g.id, label: g.description ? `${g.code} — ${g.description}` : g.code }))
+                  ]}
+                />
+                {glCodes.length === 0 && (
+                  <p className="text-slate-500 text-xs">No GL codes defined yet. Add them on the GL Codes page.</p>
+                )}
+              </RoleGuard>
             </div>
           </div>
         </Card>

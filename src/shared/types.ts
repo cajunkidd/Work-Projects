@@ -86,6 +86,18 @@ export interface BranchAsset {
   updated_at?: string
 }
 
+// ─── GL Codes ────────────────────────────────────────────────────────────────
+
+export interface GLCode {
+  id: number
+  code: string
+  description: string
+  is_active: number
+  created_at: string
+  contract_count?: number // usage counts (populated by list query)
+  invoice_count?: number
+}
+
 // ─── Contracts ──────────────────────────────────────────────────────────────
 
 export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'pending'
@@ -106,6 +118,8 @@ export interface Contract {
   department_name?: string
   branch_id: number | null
   branch_name?: string
+  gl_code_id?: number | null
+  gl_code?: string          // the code label, joined from gl_codes
   file_path?: string
   notes_count?: number
   created_at: string
@@ -157,6 +171,8 @@ export interface Invoice {
   budgeted_amount: number
   received_date: string
   is_deleted: number
+  gl_code_id?: number | null
+  gl_code?: string          // the code label, joined from gl_codes
 }
 
 // ─── Vendor Projects ────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
-import type { Contract, Department, Branch } from '../../../shared/types'
+import type { Contract, Department, Branch, GLCode } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 import ImportContractsModal from '../components/contracts/ImportContractsModal'
 import ContractCreationTab from '../components/contracts/ContractCreationTab'
@@ -29,6 +29,7 @@ const emptyForm = {
   scope: 'department' as 'department' | 'branch',
   department_id: '',
   branch_id: '',
+  gl_code_id: '',
   file_path: ''
 }
 
@@ -102,6 +103,7 @@ export default function ContractsPage() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [departments, setDepartments] = useState<Department[]>([])
   const [branches, setBranches] = useState<Branch[]>([])
+  const [glCodes, setGlCodes] = useState<GLCode[]>([])
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'list' | 'search' | 'create'>('list')
   const [filters, setFilters] = useState(emptyFilters)
@@ -143,6 +145,9 @@ export default function ContractsPage() {
     window.api.branches.list().then((res) => {
       if (res.success && res.data) setBranches(res.data)
     })
+    window.api.glCodes.list().then((res) => {
+      if (res.success && res.data) setGlCodes(res.data)
+    })
   }, [])
 
   useEffect(() => { load() }, [selectedDeptId, search, user])
@@ -171,6 +176,7 @@ export default function ContractsPage() {
       poc_phone: form.poc_phone,
       department_id: form.scope === 'department' && form.department_id ? parseInt(form.department_id) : null,
       branch_id: form.scope === 'branch' && form.branch_id ? parseInt(form.branch_id) : null,
+      gl_code_id: form.gl_code_id ? parseInt(form.gl_code_id) : null,
       file_path: form.file_path || null
     }
     const res = await window.api.contracts.create(payload)
@@ -640,6 +646,17 @@ export default function ContractsPage() {
             <Input label="POC Email" type="email" value={form.poc_email} onChange={(e) => f('poc_email', e.target.value)} />
             <Input label="POC Phone" value={form.poc_phone} onChange={(e) => f('poc_phone', e.target.value)} />
           </div>
+          <Select
+            label="GL Code"
+            value={form.gl_code_id}
+            onChange={(e) => f('gl_code_id', e.target.value)}
+            options={[
+              { value: '', label: '— No GL Code —' },
+              ...glCodes
+                .filter((g) => g.is_active || String(g.id) === form.gl_code_id)
+                .map((g) => ({ value: g.id, label: g.description ? `${g.code} — ${g.description}` : g.code }))
+            ]}
+          />
           <div className="flex items-center gap-3">
             <Button type="button" variant="secondary" onClick={handleUpload}>
               📁 Upload Contract File

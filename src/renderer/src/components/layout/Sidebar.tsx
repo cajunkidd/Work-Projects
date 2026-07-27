@@ -61,22 +61,40 @@ export default function Sidebar() {
           </NavLink>
         ))}
         {user?.role === 'super_admin' && (
-          <NavLink
-            to="/assets"
-            className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                isActive
-                  ? 'text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              }`
-            }
-            style={({ isActive }) =>
-              isActive ? { background: 'var(--brand-primary)' } : {}
-            }
-          >
-            <span className="text-base">🖥</span>
-            Assets
-          </NavLink>
+          <>
+            <NavLink
+              to="/assets"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isActive
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`
+              }
+              style={({ isActive }) =>
+                isActive ? { background: 'var(--brand-primary)' } : {}
+              }
+            >
+              <span className="text-base">🖥</span>
+              Assets
+            </NavLink>
+            <NavLink
+              to="/gl-codes"
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                  isActive
+                    ? 'text-white'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`
+              }
+              style={({ isActive }) =>
+                isActive ? { background: 'var(--brand-primary)' } : {}
+              }
+            >
+              <span className="text-base">🏷</span>
+              GL Codes
+            </NavLink>
+          </>
         )}
       </nav>
 

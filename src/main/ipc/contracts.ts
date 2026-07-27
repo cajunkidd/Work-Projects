@@ -48,12 +48,13 @@ export function registerContractHandlers(): void {
       try {
         const db = getDb()
         let query = `
-          SELECT c.*, d.name as department_name, br.name as branch_name,
+          SELECT c.*, d.name as department_name, br.name as branch_name, g.code as gl_code,
             (SELECT COUNT(*) FROM vendor_notes WHERE contract_id = c.id) as notes_count,
             CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal
           FROM contracts c
           LEFT JOIN departments d ON c.department_id = d.id
           LEFT JOIN branches br ON c.branch_id = br.id
+          LEFT JOIN gl_codes g ON c.gl_code_id = g.id
           WHERE 1=1
         `
         const params: (string | number)[] = []
@@ -116,11 +117,12 @@ export function registerContractHandlers(): void {
     try {
       const row = getDb()
         .prepare(
-          `SELECT c.*, d.name as department_name, br.name as branch_name,
+          `SELECT c.*, d.name as department_name, br.name as branch_name, g.code as gl_code,
             CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal
            FROM contracts c
            LEFT JOIN departments d ON c.department_id = d.id
            LEFT JOIN branches br ON c.branch_id = br.id
+           LEFT JOIN gl_codes g ON c.gl_code_id = g.id
            WHERE c.id = ?`
         )
         .get(id) as Contract
@@ -140,8 +142,8 @@ export function registerContractHandlers(): void {
           .prepare(
             `INSERT INTO contracts
              (vendor_name, status, start_date, end_date, monthly_cost, annual_cost, total_cost,
-              poc_name, poc_email, poc_phone, department_id, branch_id, file_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              poc_name, poc_email, poc_phone, department_id, branch_id, gl_code_id, file_path)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.vendor_name,
@@ -156,6 +158,7 @@ export function registerContractHandlers(): void {
             payload.poc_phone,
             payload.department_id ?? null,
             payload.branch_id ?? null,
+            payload.gl_code_id ?? null,
             payload.file_path || null
           )
         const row = db

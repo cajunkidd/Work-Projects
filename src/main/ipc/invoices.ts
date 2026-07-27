@@ -9,9 +9,10 @@ export function registerInvoiceHandlers(): void {
       try {
         const db = getDb()
         let query = `
-          SELECT i.*, c.vendor_name, c.department_id
+          SELECT i.*, c.vendor_name, c.department_id, g.code as gl_code
           FROM invoices i
           LEFT JOIN contracts c ON i.contract_id = c.id
+          LEFT JOIN gl_codes g ON i.gl_code_id = g.id
           WHERE i.is_deleted = 0
         `
         const params: (string | number)[] = []

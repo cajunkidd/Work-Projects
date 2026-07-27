@@ -15,6 +15,7 @@ import type {
   VendorProject,
   VendorNote,
   AppSettings,
+  GLCode,
   IpcResponse
 } from '../../../shared/types'
 
@@ -67,6 +68,15 @@ declare global {
         list: (opts?: any) => Promise<IpcResponse<Invoice[]>>
         delete: (id: number) => Promise<IpcResponse<void>>
         insert: (payload: any) => Promise<IpcResponse<Invoice>>
+      }
+      glCodes: {
+        list: () => Promise<IpcResponse<GLCode[]>>
+        create: (payload: { code: string; description?: string }) => Promise<IpcResponse<GLCode>>
+        update: (payload: { id: number; code?: string; description?: string; is_active?: number }) => Promise<IpcResponse<void>>
+        delete: (id: number) => Promise<IpcResponse<void>>
+        parseImport: () => Promise<IpcResponse<{ code: string; description: string; _duplicate: boolean }[]>>
+        bulkCreate: (rows: { code: string; description?: string }[]) => Promise<IpcResponse<{ created: number; skipped: number; errors: { code: string; message: string }[] }>>
+        assign: (payload: { entity: 'contract' | 'invoice'; id: number; gl_code_id: number | null }) => Promise<IpcResponse<void>>
       }
       competitors: {
         list: (contract_id: number) => Promise<IpcResponse<CompetitorOffering[]>>
