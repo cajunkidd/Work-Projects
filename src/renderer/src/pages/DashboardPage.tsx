@@ -23,7 +23,44 @@ import { useThemeStore } from '../store/themeStore'
 import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import { StatTile, ProgressRing, ProgressBar, Tabs } from '../components/ui'
 import type { BudgetSummary, Contract, Invoice } from '../../../shared/types'
+
+const S = {
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.7,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round'
+} as const
+
+const icons = {
+  contracts: (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" {...S} aria-hidden="true">
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z" />
+      <path d="M14 3v5h5" />
+      <path d="M9 13h6M9 17h4" />
+    </svg>
+  ),
+  active: (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" {...S} aria-hidden="true">
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <path d="m9 11 3 3L22 4" />
+    </svg>
+  ),
+  expiring: (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" {...S} aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 3" />
+    </svg>
+  ),
+  spend: (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" {...S} aria-hidden="true">
+      <path d="M12 2v20" />
+      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+    </svg>
+  )
+}
 
 const STATUS_COLORS = {
   active: '#10b981',
@@ -80,13 +117,10 @@ function BudgetBreakdownPanel({ items, onNavigate }: { items: BreakdownItem[]; o
 
         {/* Progress bar + % */}
         <div className="col-span-4 flex items-center gap-2">
-          <div className="flex-1 h-2 bg-slate-700 rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full"
-              style={{ width: noBudget ? '0%' : `${pct}%`, background: barColor }}
-            />
+          <div className="flex-1">
+            <ProgressBar value={noBudget ? 0 : pct} height={6} color={noBudget ? undefined : barColor} />
           </div>
-          <span className="text-slate-300 text-xs w-8 text-right shrink-0">
+          <span className="text-slate-300 text-xs w-8 text-right shrink-0 font-mono">
             {noBudget ? '—' : `${Math.round(pct)}%`}
           </span>
         </div>
@@ -184,34 +218,21 @@ function BudgetBreakdownPanel({ items, onNavigate }: { items: BreakdownItem[]; o
 
 function BudgetGauge({ summary }: { summary: BudgetSummary }) {
   const pct = summary.total_budget > 0 ? Math.min((summary.total_spent / summary.total_budget) * 100, 100) : 0
-  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : '#10b981'
-  const data = [{ name: 'used', value: pct, fill: color }]
+  const color = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f59e0b' : undefined
   const label = summary.branch_name ?? summary.department_name ?? 'Company'
 
   return (
     <div className="flex flex-col items-center">
-      <div className="relative">
-        <RadialBarChart
-          width={160}
-          height={160}
-          cx={80}
-          cy={80}
-          innerRadius={55}
-          outerRadius={75}
-          barSize={14}
-          data={[{ value: 100, fill: '#1e293b' }, ...data]}
-          startAngle={225}
-          endAngle={-45}
-        >
-          <RadialBar dataKey="value" cornerRadius={6} background={false} />
-        </RadialBarChart>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-white text-xl font-bold">{Math.round(pct)}%</span>
-          <span className="text-slate-400 text-xs">used</span>
+      <ProgressRing value={pct} size={150} strokeWidth={12} color={color}>
+        <div className="flex flex-col items-center">
+          <span className="font-display text-2xl font-bold text-white">{Math.round(pct)}%</span>
+          <span className="text-xs text-slate-400">of budget used</span>
         </div>
-      </div>
-      <p className="text-white text-sm font-medium mt-1 text-center">{label}</p>
-      <p className="text-slate-400 text-xs">{fmt(summary.total_spent)} / {fmt(summary.total_budget)}</p>
+      </ProgressRing>
+      <p className="mt-2 text-center text-sm font-medium text-white">{label}</p>
+      <p className="font-mono text-xs text-slate-400">
+        {fmt(summary.total_spent)} / {fmt(summary.total_budget)}
+      </p>
     </div>
   )
 }
@@ -226,19 +247,13 @@ function ChartToggle<T extends string>({
   onChange: (v: T) => void
 }) {
   return (
-    <div className="flex gap-1">
-      {options.map((o) => (
-        <button
-          key={o.key}
-          onClick={() => onChange(o.key)}
-          className={`text-xs px-2 py-0.5 rounded transition-colors ${
-            value === o.key ? 'bg-slate-600 text-white' : 'text-slate-500 hover:text-slate-300'
-          }`}
-        >
-          {o.label}
-        </button>
-      ))}
-    </div>
+    <Tabs
+      variant="pills"
+      tabs={options.map((o) => ({ id: o.key, label: o.label }))}
+      active={value}
+      onChange={(id) => onChange(id as T)}
+      className="text-xs"
+    />
   )
 }
 
@@ -340,25 +355,42 @@ export default function DashboardPage() {
     return summaries.find((s) => s.department_id === null && s.branch_id === null) ?? null
   })()
 
+  const scopeLabel =
+    user?.role === 'store_manager'
+      ? 'Your branches'
+      : user?.role === 'director'
+        ? 'Your departments & branches'
+        : selectedDeptId
+          ? 'Department view'
+          : 'Company overview'
+  const spendSeries = spendTrend.map((m) => m.amount)
+
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-white text-2xl font-bold">Dashboard</h1>
-        <p className="text-slate-400 text-sm">
-          {user?.role === 'store_manager'
-            ? `Your branches · FY ${year}`
-            : user?.role === 'director'
-              ? `Your departments & branches · FY ${year}`
-              : selectedDeptId
-                ? `Department view · FY ${year}`
-                : `Company overview · FY ${year}`}
-        </p>
+    <div className="stagger space-y-6">
+      <div className="flex items-end justify-between">
+        <div>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-white">
+            {user?.name ? (
+              <>
+                Welcome back, <span className="text-gradient">{user.name.split(' ')[0]}</span>
+              </>
+            ) : (
+              'Dashboard'
+            )}
+          </h1>
+          <p className="mt-1 text-sm text-slate-400">
+            {scopeLabel} · FY {year}
+          </p>
+        </div>
+        <Badge variant="brand" dot>
+          Live
+        </Badge>
       </div>
 
       {/* Top row: Budget gauge + stats */}
       <div className="grid grid-cols-12 gap-4">
         {/* Budget gauge */}
-        <Card className="col-span-3 flex items-center justify-center py-4">
+        <Card className="col-span-3 flex items-center justify-center py-4" glow>
           {currentSummary ? (
             <BudgetGauge summary={currentSummary} />
           ) : (
@@ -368,30 +400,33 @@ export default function DashboardPage() {
 
         {/* Stats */}
         <div className="col-span-9 grid grid-cols-4 gap-4">
-          {[
-            { label: 'Total Contracts', value: contracts.length, sub: 'all time' },
-            {
-              label: 'Active',
-              value: contracts.filter((c) => c.status === 'active').length,
-              sub: 'contracts'
-            },
-            {
-              label: 'Expiring Soon',
-              value: contracts.filter((c) => c.status === 'expiring_soon').length,
-              sub: '≤120 days'
-            },
-            {
-              label: 'Annual Spend',
-              value: fmt(contracts.reduce((s, c) => s + (c.annual_cost || 0), 0)),
-              sub: 'active contracts'
-            }
-          ].map((stat) => (
-            <Card key={stat.label}>
-              <p className="text-slate-400 text-xs mb-1">{stat.label}</p>
-              <p className="text-white text-2xl font-bold">{stat.value}</p>
-              <p className="text-slate-500 text-xs mt-0.5">{stat.sub}</p>
-            </Card>
-          ))}
+          <StatTile
+            label="Total Contracts"
+            value={contracts.length}
+            icon={icons.contracts}
+            onClick={() => navigate('/contracts')}
+          />
+          <StatTile
+            label="Active"
+            value={contracts.filter((c) => c.status === 'active').length}
+            icon={icons.active}
+            accent="#10b981"
+            onClick={() => navigate('/contracts')}
+          />
+          <StatTile
+            label="Expiring ≤120d"
+            value={contracts.filter((c) => c.status === 'expiring_soon').length}
+            icon={icons.expiring}
+            accent="#f59e0b"
+            onClick={() => navigate('/contracts')}
+          />
+          <StatTile
+            label="Annual Spend"
+            value={contracts.reduce((s, c) => s + (c.annual_cost || 0), 0)}
+            format={(n) => fmt(n)}
+            icon={icons.spend}
+            data={spendSeries.length > 1 ? spendSeries : undefined}
+          />
         </div>
       </div>
 
