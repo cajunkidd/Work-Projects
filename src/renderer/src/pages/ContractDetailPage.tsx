@@ -266,6 +266,7 @@ export default function ContractDetailPage() {
             <Badge variant={contract.status === 'active' ? 'success' : contract.status === 'expiring_soon' ? 'warning' : 'danger'}>
               {contract.status.replace('_', ' ')}
             </Badge>
+            {contract.renewal_type === 'evergreen' && <Badge variant="info">Evergreen</Badge>}
             <span className="text-slate-400 text-sm">{contract.department_name}</span>
             {contract.days_until_renewal !== undefined && contract.days_until_renewal >= 0 && (
               <span className="text-slate-400 text-sm">· {contract.days_until_renewal} days to renewal</span>
@@ -282,11 +283,31 @@ export default function ContractDetailPage() {
         </div>
       </div>
 
+      {/* Cancellation deadline alert (evergreen contracts) */}
+      {contract.renewal_type === 'evergreen' && contract.cancellation_deadline && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 flex items-start gap-3">
+          <span className="text-amber-400 text-xl leading-none">⚠</span>
+          <div>
+            <p className="text-amber-300 font-semibold text-sm">
+              Auto-renews on {contract.end_date} — cancellation deadline {contract.cancellation_deadline}
+            </p>
+            <p className="text-amber-200/80 text-sm mt-1">
+              To cancel, you must notify the vendor by {contract.cancellation_deadline}.
+              {contract.days_until_cancellation != null && contract.days_until_cancellation >= 0 ? (
+                <> You have <span className="font-bold">{contract.days_until_cancellation} days</span> remaining.</>
+              ) : (
+                <> The cancellation window has passed — the contract will renew for another cycle.</>
+              )}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Quick info */}
       <div className="grid grid-cols-4 gap-4">
         {[
           { label: 'Start Date', value: contract.start_date },
-          { label: 'End Date', value: contract.end_date },
+          { label: contract.renewal_type === 'evergreen' ? 'Next Renewal' : 'End Date', value: contract.end_date },
           { label: 'POC', value: contract.poc_name || '—' },
           { label: 'Total Value', value: fmt(contract.total_cost) }
         ].map((item) => (

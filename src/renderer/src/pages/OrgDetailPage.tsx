@@ -288,10 +288,19 @@ export default function OrgDetailPage({ type }: OrgDetailPageProps) {
                   onClick={() => navigate(`/contracts/${c.id}`)}
                 >
                   <div>
-                    <p className="text-white text-sm font-medium">{c.vendor_name}</p>
+                    <div className="flex items-center gap-1.5">
+                      <p className="text-white text-sm font-medium">{c.vendor_name}</p>
+                      {c.renewal_type === 'evergreen' && <Badge variant="info">Evergreen</Badge>}
+                    </div>
                     <p className="text-slate-400 text-xs">{c.end_date}</p>
                   </div>
-                  <Badge variant={variant}>{days}d</Badge>
+                  {c.renewal_type === 'evergreen' && c.days_until_cancellation != null ? (
+                    <Badge variant={c.days_until_cancellation <= 30 ? 'danger' : c.days_until_cancellation <= 60 ? 'warning' : 'info'}>
+                      Cancel in {c.days_until_cancellation}d
+                    </Badge>
+                  ) : (
+                    <Badge variant={variant}>{days}d</Badge>
+                  )}
                 </div>
               )
             })}

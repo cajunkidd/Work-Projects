@@ -29,7 +29,9 @@ const emptyForm = {
   scope: 'department' as 'department' | 'branch',
   department_id: '',
   branch_id: '',
-  file_path: ''
+  file_path: '',
+  renewal_type: 'fixed_term' as 'fixed_term' | 'evergreen',
+  cancellation_notice_days: ''
 }
 
 const emptyFilters = {
@@ -67,6 +69,9 @@ function ContractList({ contracts, onNavigate }: { contracts: Contract[]; onNavi
                 <Badge variant={statusVariant(c.status)}>
                   {c.status.replace('_', ' ')}
                 </Badge>
+                {c.renewal_type === 'evergreen' && (
+                  <Badge variant="info">Evergreen</Badge>
+                )}
                 {c.days_until_renewal !== undefined && c.days_until_renewal >= 0 && c.days_until_renewal <= 120 && (
                   <Badge variant={c.days_until_renewal <= 30 ? 'danger' : 'warning'}>
                     {c.days_until_renewal}d to renewal
@@ -171,7 +176,9 @@ export default function ContractsPage() {
       poc_phone: form.poc_phone,
       department_id: form.scope === 'department' && form.department_id ? parseInt(form.department_id) : null,
       branch_id: form.scope === 'branch' && form.branch_id ? parseInt(form.branch_id) : null,
-      file_path: form.file_path || null
+      file_path: form.file_path || null,
+      renewal_type: form.renewal_type,
+      cancellation_notice_days: form.renewal_type === 'evergreen' ? parseInt(form.cancellation_notice_days) || 0 : 0
     }
     const res = await window.api.contracts.create(payload)
     if (res.success && res.data && needsAllocation && allocations.length > 0) {
@@ -625,6 +632,33 @@ export default function ContractsPage() {
           <div className="grid grid-cols-2 gap-4">
             <Input label="Start Date" type="date" value={form.start_date} onChange={(e) => f('start_date', e.target.value)} required />
             <Input label="End Date" type="date" value={form.end_date} onChange={(e) => f('end_date', e.target.value)} required />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Select
+              label="Renewal Type"
+              value={form.renewal_type}
+              onChange={(e) => f('renewal_type', e.target.value)}
+              options={[
+                { value: 'fixed_term', label: 'Fixed-Term' },
+                { value: 'evergreen', label: 'Evergreen (auto-renews)' }
+              ]}
+            />
+            {form.renewal_type === 'evergreen' && (
+              <div>
+                <Input
+                  label="Cancellation Notice (days)"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={form.cancellation_notice_days}
+                  onChange={(e) => f('cancellation_notice_days', e.target.value)}
+                  placeholder="e.g. 60"
+                />
+                <p className="text-slate-500 text-xs mt-1">
+                  How many days before the renewal date the vendor must be notified to cancel.
+                </p>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-3 gap-4">
             <Input label="Monthly Cost ($)" type="number" min="0" step="0.01" value={form.monthly_cost}

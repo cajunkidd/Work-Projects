@@ -541,10 +541,19 @@ export default function DashboardPage() {
                     onClick={() => navigate(`/contracts/${c.id}`)}
                   >
                     <div>
-                      <p className="text-white text-sm font-medium">{c.vendor_name}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-white text-sm font-medium">{c.vendor_name}</p>
+                        {c.renewal_type === 'evergreen' && <Badge variant="info">Evergreen</Badge>}
+                      </div>
                       <p className="text-slate-400 text-xs">{c.branch_name ?? c.department_name}</p>
                     </div>
-                    <Badge variant={variant}>{days}d</Badge>
+                    {c.renewal_type === 'evergreen' && c.days_until_cancellation != null ? (
+                      <Badge variant={c.days_until_cancellation <= 30 ? 'danger' : c.days_until_cancellation <= 60 ? 'warning' : 'info'}>
+                        Cancel in {c.days_until_cancellation}d
+                      </Badge>
+                    ) : (
+                      <Badge variant={variant}>{days}d</Badge>
+                    )}
                   </div>
                 )
               })}
