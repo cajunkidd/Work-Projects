@@ -15,6 +15,9 @@ import type {
   VendorProject,
   VendorNote,
   AppSettings,
+  BranchAsset,
+  ContractTemplate,
+  SigningRequest,
   IpcResponse
 } from '../../../shared/types'
 
@@ -53,6 +56,8 @@ declare global {
         update: (payload: any) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>
         uploadFile: () => Promise<IpcResponse<any>>
+        parseImport: () => Promise<IpcResponse<any[]>>
+        bulkCreate: (rows: any[]) => Promise<IpcResponse<{ created: number; errors: string[] }>>
       }
       lineItems: {
         list: (contract_id: number) => Promise<IpcResponse<ContractLineItem[]>>
@@ -91,6 +96,7 @@ declare global {
         uploadLogo: () => Promise<IpcResponse<string>>
         pickDbFolder: () => Promise<IpcResponse<string>>
         extractColors: (imagePath: string) => Promise<IpcResponse<{ primary: string; secondary: string; palette: string[] }>>
+        testEmail: (toEmail: string) => Promise<IpcResponse<void>>
       }
       gmail: {
         getAuthUrl: () => Promise<IpcResponse<string>>
@@ -106,6 +112,40 @@ declare global {
       allocations: {
         list: (contract_id: number) => Promise<IpcResponse<ContractAllocation[]>>
         save: (contract_id: number, allocations: Omit<ContractAllocation, 'id' | 'created_at'>[]) => Promise<IpcResponse<void>>
+      }
+      assets: {
+        list: () => Promise<IpcResponse<BranchAsset[]>>
+        save: (rows: any[]) => Promise<IpcResponse<void>>
+        importFile: () => Promise<
+          IpcResponse<{
+            rows: {
+              branch_id: number | null
+              branch_raw: string
+              computers: number
+              thin_clients: number
+              servers: number
+              printers: number
+              ingenicos: number
+            }[]
+            unmapped: string[]
+          }>
+        >
+      }
+      exports: {
+        invoices: (data: any[]) => Promise<IpcResponse<void>>
+        contractsList: (data: any[]) => Promise<IpcResponse<void>>
+        contractDetail: (payload: any) => Promise<IpcResponse<void>>
+      }
+      contractCreation: {
+        saveTemplate: (payload: { id?: number; title: string; content: string }) => Promise<IpcResponse<ContractTemplate>>
+        uploadTemplate: (payload?: any) => Promise<IpcResponse<ContractTemplate>>
+        listTemplates: () => Promise<IpcResponse<ContractTemplate[]>>
+        deleteTemplate: (id: number) => Promise<IpcResponse<void>>
+        generatePdf: (html: string, title: string) => Promise<IpcResponse<{ path: string }>>
+        send: (payload: any) => Promise<IpcResponse<{ requestId: number }>>
+        listRequests: () => Promise<IpcResponse<SigningRequest[]>>
+        refreshStatus: (requestId: number) => Promise<IpcResponse<SigningRequest>>
+        testDocumenso: () => Promise<IpcResponse<{ connected: boolean }>>
       }
     }
   }

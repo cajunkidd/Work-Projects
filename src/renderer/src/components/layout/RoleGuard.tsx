@@ -1,8 +1,8 @@
 import { useAuthStore } from '../../store/authStore'
-import type { UserRole } from '../../../../shared/types'
+import type { RoleLike } from '../../../../shared/types'
 
 interface Props {
-  minRole: UserRole
+  minRole: RoleLike
   children: React.ReactNode
   fallback?: React.ReactNode
 }

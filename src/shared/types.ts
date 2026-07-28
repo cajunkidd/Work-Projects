@@ -2,6 +2,14 @@
 
 export type UserRole = 'super_admin' | 'director' | 'store_manager'
 
+// Pre-migration role names. The database migrates these to the current names
+// (see database.ts), but permission checks still accept them so existing
+// `minRole` call sites keep working.
+export type LegacyUserRole = 'viewer' | 'editor' | 'admin'
+
+/** Any role name accepted by a permission check. */
+export type RoleLike = UserRole | LegacyUserRole
+
 export interface User {
   id: number
   name: string
