@@ -257,11 +257,11 @@ export default function ContractsPage() {
   const inputCls = 'bg-slate-800 border border-slate-600 text-white text-sm rounded-lg px-3 py-2 focus:outline-none w-full placeholder-slate-500'
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white text-2xl font-bold">Contracts</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-white">Contracts</h1>
           <p className="text-slate-400 text-sm">{contracts.length} contracts</p>
         </div>
         <div className="flex items-center gap-2">

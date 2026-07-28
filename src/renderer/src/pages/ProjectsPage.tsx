@@ -65,10 +65,10 @@ export default function ProjectsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white text-2xl font-bold">Vendor Projects</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-white">Vendor Projects</h1>
           <p className="text-slate-400 text-sm">{projects.length} total · {counts.active} active</p>
         </div>
         <RoleGuard minRole="editor">

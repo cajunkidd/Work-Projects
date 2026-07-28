@@ -111,7 +111,7 @@ export default function OrgDetailPage({ type }: OrgDetailPageProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
@@ -125,7 +125,7 @@ export default function OrgDetailPage({ type }: OrgDetailPageProps) {
             Dashboard
           </button>
           <span className="text-slate-600">/</span>
-          <h1 className="text-white text-xl font-bold">{entityName}</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight text-white">{entityName}</h1>
           <span className={`text-xs px-2 py-0.5 rounded font-medium ${
             type === 'branch' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'
           }`}>

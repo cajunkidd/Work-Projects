@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useThemeStore } from '../store/themeStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
+import { EmptyState } from '../components/ui'
 import type { Contract, CompetitorOffering } from '../../../shared/types'
 
 function fmt(n: number) {
@@ -31,19 +32,19 @@ export default function CompetitorsPage() {
   }, [selectedDeptId])
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       <div>
-        <h1 className="text-white text-2xl font-bold">Competitor Analysis</h1>
-        <p className="text-slate-400 text-sm">Compare current vendors with competitor offerings. Add competitor offerings from the contract detail page.</p>
+        <h1 className="font-display text-3xl font-bold tracking-tight text-white">Competitor Analysis</h1>
+        <p className="mt-1 text-sm text-slate-400">Compare current vendors with competitor offerings. Add competitor offerings from the contract detail page.</p>
       </div>
 
       {contracts.filter((c) => (offerings[c.id] || []).length > 0).length === 0 ? (
-        <Card className="text-center py-12">
-          <p className="text-slate-400 mb-2">No competitor offerings added yet.</p>
-          <p className="text-slate-500 text-sm">Go to a contract's detail page → Competitors tab to add offerings.</p>
-        </Card>
+        <EmptyState
+          title="No competitor offerings yet"
+          description="Go to a contract's detail page → Competitors tab to add offerings."
+        />
       ) : (
-        <div className="space-y-4">
+        <div className="stagger space-y-4">
           {contracts
             .filter((c) => (offerings[c.id] || []).length > 0)
             .map((c) => {
