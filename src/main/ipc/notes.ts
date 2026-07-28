@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import type { IpcResponse, VendorNote } from '../../shared/types'
+import { recordAudit } from '../audit'
+import type { Actor, IpcResponse, VendorNote } from '../../shared/types'
 
 export function registerNoteHandlers(): void {
   ipcMain.handle(
@@ -21,18 +22,38 @@ export function registerNoteHandlers(): void {
     'notes:create',
     async (
       _e,
-      payload: { contract_id: number; note: string; created_by: string }
+      payload: { contract_id: number; note: string; created_by: string; actor?: Actor }
     ): Promise<IpcResponse<VendorNote>> => {
       try {
         const db = getDb()
         const result = db
           .prepare(
-            'INSERT INTO vendor_notes (contract_id, note, created_by) VALUES (?,?,?)'
+            'INSERT INTO vendor_notes (contract_id, note, created_by, created_by_user_id) VALUES (?,?,?,?)'
           )
-          .run(payload.contract_id, payload.note, payload.created_by)
+          .run(
+            payload.contract_id,
+            payload.note,
+            payload.created_by,
+            payload.actor?.id ?? null
+          )
         const row = db
           .prepare('SELECT * FROM vendor_notes WHERE id = ?')
           .get(result.lastInsertRowid) as VendorNote
+
+        const contract = db
+          .prepare('SELECT vendor_name FROM contracts WHERE id = ?')
+          .get(payload.contract_id) as { vendor_name: string } | undefined
+        recordAudit(db, {
+          entity_type: 'contract',
+          entity_id: payload.contract_id,
+          entity_label: contract?.vendor_name ?? `Contract #${payload.contract_id}`,
+          action: 'create',
+          field_name: 'note',
+          new_value: payload.note,
+          summary: 'Note added',
+          actor: payload.actor
+        })
+
         return { success: true, data: row }
       } catch (err: any) {
         return { success: false, error: err.message }

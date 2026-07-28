@@ -4,6 +4,10 @@ A Windows desktop application for directors and teams to manage company and depa
 
 ## Features
 
+- **Approval workflows** — configurable routing rules (by scope, cost band, and vendor) send a contract through sequential sign-off before it goes active
+- **Version control & redlining** — capture each draft, compare any two versions as a word-level redline, restore prior terms
+- **Audit trail** — append-only log of every change: who, what, before/after, and when
+- **Clause library** — reusable standard clauses with fallback variants, searchable and insertable while drafting
 - **Multi-department contract tracking** with company-wide roll-up
 - **Budget management** per department and company overall
 - **Dashboard** with charts: spend trends, budget gauges, contract status, upcoming renewals

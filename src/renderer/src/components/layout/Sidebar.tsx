@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import { useThemeStore } from '../../store/themeStore'
 import { useAuthStore } from '../../store/authStore'
@@ -5,6 +6,8 @@ import { useAuthStore } from '../../store/authStore'
 const navItems = [
   { to: '/dashboard', label: 'Dashboard', icon: '⊞' },
   { to: '/contracts', label: 'Contracts', icon: '📄' },
+  { to: '/approvals', label: 'Approvals', icon: '✓' },
+  { to: '/clauses', label: 'Clauses', icon: '§' },
   { to: '/invoices', label: 'Invoices', icon: '📧' },
   { to: '/competitors', label: 'Competitors', icon: '⚖' },
   { to: '/projects', label: 'Projects', icon: '🗂' },
@@ -14,6 +17,21 @@ const navItems = [
 export default function Sidebar() {
   const logoPath = useThemeStore((s) => s.logoPath)
   const { user, logout } = useAuthStore()
+  const [pendingApprovals, setPendingApprovals] = useState(0)
+
+  // Poll the approval inbox so the badge reflects decisions made by teammates
+  // sharing the same database file.
+  useEffect(() => {
+    if (!user) return
+    const refresh = () => {
+      window.api.approvals.inboxCount({ user_id: user.id }).then((res) => {
+        if (res.success && typeof res.data === 'number') setPendingApprovals(res.data)
+      })
+    }
+    refresh()
+    const timer = setInterval(refresh, 60_000)
+    return () => clearInterval(timer)
+  }, [user])
 
   return (
     <aside className="w-56 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col">
@@ -58,8 +76,31 @@ export default function Sidebar() {
           >
             <span className="text-base">{item.icon}</span>
             {item.label}
+            {item.to === '/approvals' && pendingApprovals > 0 && (
+              <span className="ml-auto bg-amber-500 text-slate-900 text-xs font-bold rounded-full px-1.5 min-w-[1.25rem] text-center">
+                {pendingApprovals}
+              </span>
+            )}
           </NavLink>
         ))}
+        {user?.role === 'super_admin' && (
+          <NavLink
+            to="/audit"
+            className={({ isActive }) =>
+              `flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                isActive
+                  ? 'text-white'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
+              }`
+            }
+            style={({ isActive }) =>
+              isActive ? { background: 'var(--brand-primary)' } : {}
+            }
+          >
+            <span className="text-base">🕓</span>
+            Audit Log
+          </NavLink>
+        )}
         {user?.role === 'super_admin' && (
           <NavLink
             to="/assets"

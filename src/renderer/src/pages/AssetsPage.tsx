@@ -104,7 +104,7 @@ export default function AssetsPage() {
 
   async function handleSave() {
     setSaving(true)
-    const rows: { branch_id: number; asset_type: string; count: number }[] = []
+    const rows: BranchAsset[] = []
     for (const [branchId, counts] of draft.entries()) {
       for (const { key } of ALL_ASSET_TYPES) {
         rows.push({ branch_id: branchId, asset_type: key, count: counts[key] })

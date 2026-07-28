@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
@@ -17,8 +17,22 @@ import type {
   ContractAllocation
 } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
+import ApprovalTab from '../components/contracts/ApprovalTab'
+import VersionsTab from '../components/contracts/VersionsTab'
+import HistoryTab from '../components/contracts/HistoryTab'
+import { useActor } from '../lib/actor'
 
-const BASE_TABS = ['Overview', 'Line Items', 'Renewals', 'Notes', 'Projects', 'Competitors']
+const BASE_TABS = [
+  'Overview',
+  'Line Items',
+  'Approvals',
+  'Versions',
+  'Renewals',
+  'Notes',
+  'Projects',
+  'Competitors',
+  'History'
+]
 
 function fmt(n: number) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -28,6 +42,7 @@ export default function ContractDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { user } = useAuthStore()
+  const actor = useActor()
   const { brandPrimary } = useThemeStore()
   const contractId = parseInt(id!)
 
@@ -60,6 +75,14 @@ export default function ContractDetailPage() {
   const [noteText, setNoteText] = useState('')
   const [projectForm, setProjectForm] = useState({ name: '', status: 'active', start_date: '', end_date: '', description: '' })
   const [competitorForm, setCompetitorForm] = useState({ competitor_vendor: '', offering_name: '', price: '', notes: '' })
+
+  // Re-read the contract after an approval decision or a version restore, both
+  // of which change fields this page displays.
+  const reloadContract = useCallback(() => {
+    window.api.contracts.get(contractId).then((res) => {
+      if (res.success && res.data) setContract(res.data)
+    })
+  }, [contractId])
 
   useEffect(() => {
     window.api.contracts.get(contractId).then((res) => {
@@ -135,7 +158,7 @@ export default function ContractDetailPage() {
 
   const saveNote = async (e: React.FormEvent) => {
     e.preventDefault()
-    await window.api.notes.create({ contract_id: contractId, note: noteText, created_by: user?.name || 'Unknown' })
+    await window.api.notes.create({ contract_id: contractId, note: noteText, created_by: user?.name || 'Unknown', actor })
     const res = await window.api.notes.list(contractId)
     if (res.success && res.data) setNotes(res.data)
     setShowNoteModal(false)
@@ -167,7 +190,10 @@ export default function ContractDetailPage() {
   }
 
   const isDeptContract = contract?.department_id !== null && contract?.branch_id === null
-  const tabs = isDeptContract ? [...BASE_TABS, 'Allocations'] : BASE_TABS
+  // Allocations slots in ahead of History, which always reads last.
+  const tabs = isDeptContract
+    ? [...BASE_TABS.slice(0, -1), 'Allocations', 'History']
+    : BASE_TABS
 
   const saveAllocations = async () => {
     if (!contract) return
@@ -267,6 +293,9 @@ export default function ContractDetailPage() {
               {contract.status.replace('_', ' ')}
             </Badge>
             {contract.renewal_type === 'evergreen' && <Badge variant="info">Evergreen</Badge>}
+            {contract.approval_state === 'pending' && <Badge variant="warning">Awaiting approval</Badge>}
+            {contract.approval_state === 'approved' && <Badge variant="success">Approved</Badge>}
+            {contract.approval_state === 'rejected' && <Badge variant="danger">Approval rejected</Badge>}
             <span className="text-slate-400 text-sm">{contract.department_name}</span>
             {contract.days_until_renewal !== undefined && contract.days_until_renewal >= 0 && (
               <span className="text-slate-400 text-sm">· {contract.days_until_renewal} days to renewal</span>
@@ -431,6 +460,16 @@ export default function ContractDetailPage() {
           </Card>
         </div>
       )}
+
+      {activeTab === 'Approvals' && (
+        <ApprovalTab contract={contract} onContractChanged={reloadContract} />
+      )}
+
+      {activeTab === 'Versions' && (
+        <VersionsTab contractId={contractId} onContractChanged={reloadContract} />
+      )}
+
+      {activeTab === 'History' && <HistoryTab contractId={contractId} />}
 
       {activeTab === 'Renewals' && (
         <div className="space-y-4">

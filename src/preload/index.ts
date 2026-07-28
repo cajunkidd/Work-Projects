@@ -143,5 +143,53 @@ contextBridge.exposeInMainWorld('api', {
     listRequests: () => ipcRenderer.invoke('contractCreation:listRequests'),
     refreshStatus: (requestId: number) => ipcRenderer.invoke('contractCreation:refreshStatus', requestId),
     testDocumenso: () => ipcRenderer.invoke('contractCreation:testDocumenso')
+  },
+
+  // Audit Trail
+  audit: {
+    list: (filter?: any) => ipcRenderer.invoke('audit:list', filter),
+    entityHistory: (opts: any) => ipcRenderer.invoke('audit:entityHistory', opts),
+    actors: () => ipcRenderer.invoke('audit:actors'),
+    stats: () => ipcRenderer.invoke('audit:stats')
+  },
+
+  // Approval Workflows
+  approvalRules: {
+    list: () => ipcRenderer.invoke('approvalRules:list'),
+    create: (payload: any) => ipcRenderer.invoke('approvalRules:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('approvalRules:update', payload),
+    delete: (payload: any) => ipcRenderer.invoke('approvalRules:delete', payload)
+  },
+  approvals: {
+    preview: (contract_id: number) => ipcRenderer.invoke('approvals:preview', contract_id),
+    submit: (payload: any) => ipcRenderer.invoke('approvals:submit', payload),
+    decide: (payload: any) => ipcRenderer.invoke('approvals:decide', payload),
+    cancel: (payload: any) => ipcRenderer.invoke('approvals:cancel', payload),
+    forContract: (contract_id: number) => ipcRenderer.invoke('approvals:forContract', contract_id),
+    inbox: (opts: any) => ipcRenderer.invoke('approvals:inbox', opts),
+    inboxCount: (opts: any) => ipcRenderer.invoke('approvals:inboxCount', opts)
+  },
+
+  // Contract Versions & Redlining
+  versions: {
+    list: (contract_id: number) => ipcRenderer.invoke('versions:list', contract_id),
+    get: (id: number) => ipcRenderer.invoke('versions:get', id),
+    create: (payload: any) => ipcRenderer.invoke('versions:create', payload),
+    importFile: () => ipcRenderer.invoke('versions:importFile'),
+    diff: (opts: any) => ipcRenderer.invoke('versions:diff', opts),
+    restore: (payload: any) => ipcRenderer.invoke('versions:restore', payload),
+    delete: (payload: any) => ipcRenderer.invoke('versions:delete', payload)
+  },
+
+  // Clause Library
+  clauses: {
+    list: (filter?: any) => ipcRenderer.invoke('clauses:list', filter),
+    get: (id: number) => ipcRenderer.invoke('clauses:get', id),
+    create: (payload: any) => ipcRenderer.invoke('clauses:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('clauses:update', payload),
+    archive: (payload: any) => ipcRenderer.invoke('clauses:archive', payload),
+    delete: (payload: any) => ipcRenderer.invoke('clauses:delete', payload),
+    categories: () => ipcRenderer.invoke('clauses:categories'),
+    recordUsage: (id: number) => ipcRenderer.invoke('clauses:recordUsage', id)
   }
 })

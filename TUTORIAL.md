@@ -29,8 +29,12 @@ A step-by-step walkthrough of every feature in Contract Manager, written for the
 19. [E-Signature via Documenso](#19-e-signature-via-documenso)
 20. [Sharing the Database Across Your Team](#20-sharing-the-database-across-your-team)
 21. [Department & Branch Drill-down](#21-department--branch-drill-down)
-22. [Signing Out](#22-signing-out)
-23. [Troubleshooting & FAQ](#23-troubleshooting--faq)
+22. [Approval Workflows](#22-approval-workflows)
+23. [Version Control & Redlining](#23-version-control--redlining)
+24. [Audit Trail](#24-audit-trail)
+25. [Clause Library](#25-clause-library)
+26. [Signing Out](#26-signing-out)
+27. [Troubleshooting & FAQ](#27-troubleshooting--faq)
 
 ---
 
@@ -110,10 +114,13 @@ After the first admin exists, the screen behaves like a normal login.
 |---|---|
 | ⊞ **Dashboard** | Charts, budget gauges, upcoming renewals, recent activity. |
 | 📄 **Contracts** | Browse, search, and create contracts. |
+| ✓ **Approvals** | Contracts waiting on your sign-off. Shows a count badge when any are pending. |
+| § **Clauses** | The clause library — approved contract language and its fallbacks. |
 | 📧 **Invoices** | Vendor billing emails pulled from Gmail. |
 | ⚖ **Competitors** | Side-by-side price comparison against competing vendors. |
 | 🗂 **Projects** | Vendor project tracker (Active / On Hold / Completed). |
-| ⚙ **Settings** | Branding, org structure, budgets, integrations, users, database. |
+| ⚙ **Settings** | Branding, org structure, budgets, approval rules, integrations, users, database. |
+| 🕓 **Audit Log** | Every recorded change across the system — **Super Admin only**. |
 | 🖥 **Assets** | IT inventory grid — **Super Admin only**. |
 
 Your name and role show at the bottom of the sidebar, along with a **Sign out** button.
@@ -562,16 +569,151 @@ From the Dashboard's **Budget Breakdown** panel, click any row and you land on t
 
 ---
 
-## 22. Signing Out
+## 22. Approval Workflows
+
+Contracts can be required to collect sign-off before they count as active.
+
+### Setting up routing rules (Super Admin)
+
+Go to **Settings → Approval Rules → + Add Rule**. A rule answers four questions:
+
+| Field | What it does |
+|---|---|
+| **Applies To** | Company-wide, one department, or one branch. |
+| **Cost Measured On** + **Minimum / Maximum** | The spend band that triggers the rule, measured on annual, monthly, or total contract value. Leave Maximum blank for "and above". |
+| **Vendor Name Contains** | Optional. Restricts the rule to matching vendors — useful for a rule that only covers one supplier. |
+| **Approver** | Either a named person, or anyone holding a role. |
+| **Step Order** | Rules run lowest-to-highest. Step 2 doesn't see the contract until step 1 approves. |
+
+A typical setup: "IT spend over $10k → Director" at step 1, and "Any spend over $50k → Super Admin" at step 2. A $75k IT contract then needs both, in that order.
+
+### Submitting a contract
+
+Open a contract, go to the **Approvals** tab, and click **Submit for Approval**. Before you confirm, the panel lists exactly which approvers it will route to. Add a note if the approvers need context.
+
+While a contract is awaiting approval its status shows **pending** — it will not be counted as active on dashboards, and the nightly status sweep won't move it to active or expiring while it waits.
+
+If no rule matches the contract, submitting simply records that no approval was required and leaves the contract alone.
+
+### Approving or rejecting
+
+Approvers see a count badge on the **Approvals** item in the sidebar. Open it to see everything waiting on you, then Approve or Reject with a comment.
+
+- **Approving** the last step marks the contract approved and returns it to the normal date-driven lifecycle.
+- **Rejecting** at any step ends the request, skips the remaining steps, and leaves the contract pending until it's revised and resubmitted.
+
+Two rules are enforced regardless of what the app UI allows: you cannot approve a contract you submitted yourself (unless a rule names you personally as the approver), and steps must be decided in order.
+
+### Withdrawing
+
+The submitter — or a Super Admin — can withdraw an in-progress request from the Approvals tab. The contract returns to its normal status as if it had never been submitted.
+
+![Approvals tab on a contract](docs/images/approvals-tab.png)
+
+**What you just showed off:** spend controls that actually block, with separation of duties built in.
+
+---
+
+## 23. Version Control & Redlining
+
+The **Versions** tab on a contract keeps the negotiation history.
+
+### Capturing a version
+
+Click **+ Capture Version**, then either paste the document text or click **Import from PDF / text file** to pull it out of a file. Give it a title ("Vendor's first markup") and a one-line summary of what changed.
+
+Each version also snapshots the contract's commercial terms — dates, costs, contacts, renewal type — as they stood at capture time.
+
+### Comparing
+
+Pick any two versions in the **Compare Versions** panel and click **Compare**. You get:
+
+- **Contract terms that changed** — a plain list of which commercial fields moved, and from what to what.
+- **A redline** — insertions underlined in green, deletions struck through in red. A reworded sentence shows as one modified line with the changed words highlighted, not as a wholesale delete-and-retype.
+
+Toggle between **Changes only** (hides untouched text, with two lines of context) and **Full redline** (the whole document).
+
+### Restoring
+
+**Restore Terms** on any version copies that version's commercial terms back onto the live contract. The document history is never rewritten — the restore is recorded as its own audit entry, so you can always see that it happened.
+
+![Version comparison showing a redline](docs/images/version-redline.png)
+
+**What you just showed off:** the negotiation trail, and the ability to answer "what did we actually agree to in March?"
+
+---
+
+## 24. Audit Trail
+
+Every change is recorded permanently.
+
+### On a single contract
+
+The **History** tab on any contract shows its full timeline: creation, every field edit with its before and after value, notes added, approval submissions and decisions, versions captured, and restores.
+
+### Across the whole system (Super Admin)
+
+**Audit Log** in the sidebar shows everything, with filters for record type, action, user, and date range, plus a free-text search across record names, details, and users. **Export** writes the current filtered view to a spreadsheet for compliance requests.
+
+Nothing in the app edits or deletes audit entries — the log is append-only.
+
+![Audit log with filters](docs/images/audit-log.png)
+
+**What you just showed off:** "who changed this, and when?" answered in seconds instead of never.
+
+---
+
+## 25. Clause Library
+
+**Clauses** in the sidebar holds your approved contract language.
+
+### How it's organised
+
+Clauses are grouped by category, and each **standard** position can carry **fallback** or **alternative** variants beneath it — the positions you're willing to retreat to when a vendor pushes back. Each clause carries a risk level and a line of guidance telling a drafter when to reach for it.
+
+The app ships with a starter set covering confidentiality, limitation of liability, termination, auto-renewal, payment terms, price-increase caps, data protection, indemnification, service levels, and governing law — most with their fallback position already written.
+
+### Finding and using clauses
+
+Search runs across titles, body text, and tags. Filter by category or type. **Copy** puts the clause text on your clipboard.
+
+While drafting in **Contracts → Contract Creation**, the **§ Clause Library** toolbar button opens a picker that inserts the clause straight into your document with its title as a heading. Each insertion bumps the clause's usage counter, so you can see which language actually gets used.
+
+### Maintaining the library
+
+Directors and Super Admins can add, edit, and archive clauses; **+ Fallback** on a standard clause creates a variant already linked to its parent. Archiving hides a clause from drafting while keeping it for historical reference. Every change is recorded in the audit log.
+
+![Clause library grouped by category](docs/images/clause-library.png)
+
+**What you just showed off:** consistent contract language that doesn't depend on whoever drafted last remembering the right wording.
+
+---
+
+## 26. Signing Out
 
 At the bottom of the sidebar, under your name and role, click **Sign out**. You're returned to the login screen immediately. No background session remains.
 
 ---
 
-## 23. Troubleshooting & FAQ
+## 27. Troubleshooting & FAQ
 
 **"I don't see the Assets page in the sidebar."**
 Assets is Super Admin only. Ask a Super Admin to upgrade your role, or have them manage assets for you.
+
+**"I submitted a contract for approval but nothing was routed."**
+No approval rule matched it. Check the contract's **Approvals** tab — the Routing panel lists every rule that applies, and says so plainly when none do. Confirm the rule's scope (company / department / branch), its cost band, and that it's marked active in Settings → Approval Rules.
+
+**"I can't approve my own contract."**
+That's deliberate. A submitter can't clear their own request unless a rule names them personally as the approver. Have another approver decide it, or withdraw and have someone else submit.
+
+**"An approver says they see nothing in their Approvals list."**
+Steps are sequential — step 2's approver sees nothing until step 1 approves. Also check the step is assigned to them, either by name or by a role they actually hold.
+
+**"A contract is stuck showing 'pending'."**
+It's either awaiting approval or was rejected. Open its **Approvals** tab: approve the outstanding step, or withdraw the request to return the contract to its normal status. Contracts in the approval pipeline are deliberately excluded from the automatic status sweep, so dates alone won't move them.
+
+**"The redline shows a whole line as deleted and re-added instead of highlighting the changed words."**
+That happens when the two lines are too dissimilar to pair up — usually a genuinely rewritten paragraph rather than an edit. Comparing versions captured closer together gives a tighter redline.
 
 **"Gmail sync imported 0 invoices."**
 Make sure the Gmail account was connected recently (§17.1), that billing emails exist in the mailbox, and that the sender address vaguely matches a known vendor. If a message doesn't match a vendor name in your contracts, it won't be imported.

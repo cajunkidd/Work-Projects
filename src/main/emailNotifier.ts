@@ -167,6 +167,80 @@ function fmtCost(n: number): string {
 
 // ─── Public notification helpers ──────────────────────────────────────────────
 
+/**
+ * Tells the approvers on the current step that a contract is waiting on them.
+ * Recipients are resolved from the step assignment (a named user, or every user
+ * holding the step's role) rather than from department/branch scope.
+ */
+export async function notifyApprovalRequested(
+  db: Database,
+  payload: {
+    vendor_name: string
+    annual_cost: number
+    department_id: number | null
+    branch_id: number | null
+    requested_by: string
+    step_name: string
+    step_order: number
+    total_steps: number
+    note: string
+    approver_emails: string[]
+  }
+): Promise<void> {
+  const html = emailTemplate('Contract Awaiting Your Approval', [
+    { label: 'Vendor', value: payload.vendor_name },
+    { label: 'Scope', value: scopeLabel(db, payload.department_id, payload.branch_id) },
+    { label: 'Annual Cost', value: fmtCost(payload.annual_cost) },
+    { label: 'Submitted By', value: payload.requested_by },
+    { label: 'Approval Step', value: `${payload.step_name} (${payload.step_order} of ${payload.total_steps})` },
+    ...(payload.note ? [{ label: 'Note', value: payload.note }] : [])
+  ])
+
+  await sendEmail(
+    db,
+    payload.approver_emails,
+    `Approval needed: ${payload.vendor_name}`,
+    html
+  ).catch(() => {})
+}
+
+/** Notifies the submitter (and scope watchers) once a request is fully decided. */
+export async function notifyApprovalDecided(
+  db: Database,
+  payload: {
+    vendor_name: string
+    annual_cost: number
+    department_id: number | null
+    branch_id: number | null
+    decision: 'approved' | 'rejected'
+    decided_by: string
+    comment: string
+    requester_email: string | null
+  }
+): Promise<void> {
+  const to = new Set(getUserEmailsToNotify(db, payload.department_id, payload.branch_id))
+  if (payload.requester_email) to.add(payload.requester_email)
+
+  const html = emailTemplate(
+    payload.decision === 'approved' ? 'Contract Approved' : 'Contract Rejected',
+    [
+      { label: 'Vendor', value: payload.vendor_name },
+      { label: 'Scope', value: scopeLabel(db, payload.department_id, payload.branch_id) },
+      { label: 'Annual Cost', value: fmtCost(payload.annual_cost) },
+      { label: 'Decision', value: payload.decision === 'approved' ? 'Approved' : 'Rejected' },
+      { label: 'Decided By', value: payload.decided_by },
+      ...(payload.comment ? [{ label: 'Comment', value: payload.comment }] : [])
+    ]
+  )
+
+  await sendEmail(
+    db,
+    [...to],
+    `${payload.decision === 'approved' ? 'Approved' : 'Rejected'}: ${payload.vendor_name}`,
+    html
+  ).catch(() => {})
+}
+
 export async function notifyContractCreated(
   db: Database,
   contract: {

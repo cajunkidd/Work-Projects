@@ -3,7 +3,8 @@ import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
-import type { ContractTemplate, SigningRequest, SigningRequestStatus } from '../../../../shared/types'
+import type { Clause, ContractTemplate, SigningRequest, SigningRequestStatus } from '../../../../shared/types'
+import ClausePickerModal from './ClausePickerModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -194,6 +195,7 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
   const [sending, setSending] = useState(false)
   const [msg, setMsg] = useState('')
   const [savedTemplateId, setSavedTemplateId] = useState<number | undefined>()
+  const [showClausePicker, setShowClausePicker] = useState(false)
 
   const editor = useEditor({
     extensions: [
@@ -219,6 +221,19 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
           <div class="signature-field-label">Signature Required</div>
         </div>`
       )
+      .run()
+  }
+
+  /** Drops an approved clause into the draft as a titled block. */
+  const insertClause = (clause: Clause) => {
+    const paragraphs = clause.body
+      .split(/\n{2,}/)
+      .map((p) => `<p>${p.replace(/\n/g, '<br>')}</p>`)
+      .join('')
+    editor
+      ?.chain()
+      .focus()
+      .insertContent(`<h3>${clause.title}</h3>${paragraphs}`)
       .run()
   }
 
@@ -377,6 +392,13 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
           <ToolbarBtn onClick={handleInsertImage} title="Insert image">
             🖼 Image
           </ToolbarBtn>
+
+          <ToolbarBtn
+            onClick={() => setShowClausePicker(true)}
+            title="Insert approved language from the clause library"
+          >
+            § Clause Library
+          </ToolbarBtn>
         </div>
 
         {/* Editor content area */}
@@ -384,6 +406,12 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
           <EditorContent editor={editor} />
         </div>
       </div>
+
+      <ClausePickerModal
+        open={showClausePicker}
+        onClose={() => setShowClausePicker(false)}
+        onInsert={insertClause}
+      />
 
       {/* Recipient */}
       <RecipientForm

@@ -7,7 +7,9 @@ import {
   notifyContractUpdated,
   notifyContractDeleted
 } from '../emailNotifier'
+import { recordAudit, recordFieldChanges } from '../audit'
 import type {
+  Actor,
   IpcResponse,
   Contract,
   ContractLineItem,
@@ -151,7 +153,10 @@ export function registerContractHandlers(): void {
   // Create contract
   ipcMain.handle(
     'contracts:create',
-    async (_e, payload: Omit<Contract, 'id' | 'created_at'>): Promise<IpcResponse<Contract>> => {
+    async (
+      _e,
+      payload: Omit<Contract, 'id' | 'created_at'> & { actor?: Actor }
+    ): Promise<IpcResponse<Contract>> => {
       try {
         const db = getDb()
         const result = db
@@ -182,6 +187,16 @@ export function registerContractHandlers(): void {
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(result.lastInsertRowid) as Contract
+
+        recordAudit(db, {
+          entity_type: 'contract',
+          entity_id: row.id,
+          entity_label: row.vendor_name,
+          action: 'create',
+          summary: `Contract created for ${row.vendor_name} (${row.start_date} → ${row.end_date}, ${row.annual_cost}/yr)`,
+          actor: payload.actor
+        })
+
         notifyContractCreated(db, row).catch(() => {})
         return { success: true, data: row }
       } catch (err: any) {
@@ -193,18 +208,47 @@ export function registerContractHandlers(): void {
   // Update contract
   ipcMain.handle(
     'contracts:update',
-    async (_e, payload: Partial<Contract> & { id: number }): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      payload: Partial<Contract> & { id: number; actor?: Actor }
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
-        // Fetch current contract for notification context before updating
+        // Fetch current contract for notification and audit context before updating
         const current = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(payload.id) as Contract | undefined
-        const fields = Object.keys(payload).filter((k) => k !== 'id')
+
+        // `actor` and the joined display-only columns are not contract columns.
+        const NON_COLUMNS = [
+          'id',
+          'actor',
+          'department_name',
+          'branch_name',
+          'notes_count',
+          'days_until_renewal',
+          'cancellation_deadline',
+          'days_until_cancellation'
+        ]
+        const fields = Object.keys(payload).filter((k) => !NON_COLUMNS.includes(k))
+        if (fields.length === 0) return { success: true }
+
         const sets = fields.map((f) => `${f} = ?`).join(', ')
         const values = fields.map((f) => (payload as any)[f])
-        db.prepare(`UPDATE contracts SET ${sets} WHERE id = ?`).run(...values, payload.id)
+        db.prepare(
+          `UPDATE contracts SET ${sets}, updated_at = datetime('now'), updated_by = ? WHERE id = ?`
+        ).run(...values, payload.actor?.name ?? 'System', payload.id)
+
         if (current) {
+          recordFieldChanges(db, {
+            entity_type: 'contract',
+            entity_id: payload.id,
+            entity_label: current.vendor_name,
+            before: current as unknown as Record<string, unknown>,
+            after: payload as Record<string, unknown>,
+            fields,
+            actor: payload.actor
+          })
           notifyContractUpdated(db, current, fields).catch(() => {})
         }
         return { success: true }
@@ -214,15 +258,25 @@ export function registerContractHandlers(): void {
     }
   )
 
-  // Delete contract
-  ipcMain.handle('contracts:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  // Delete contract. Accepts a bare id or { id, actor }.
+  ipcMain.handle('contracts:delete', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
       const db = getDb()
+      const id = typeof arg === 'number' ? arg : arg.id
+      const actor = typeof arg === 'number' ? undefined : arg.actor
       const contract = db
-        .prepare('SELECT vendor_name, department_id, branch_id FROM contracts WHERE id = ?')
-        .get(id) as { vendor_name: string; department_id: number | null; branch_id: number | null } | undefined
+        .prepare('SELECT vendor_name, department_id, branch_id, annual_cost FROM contracts WHERE id = ?')
+        .get(id) as { vendor_name: string; department_id: number | null; branch_id: number | null; annual_cost: number } | undefined
       db.prepare('DELETE FROM contracts WHERE id = ?').run(id)
       if (contract) {
+        recordAudit(db, {
+          entity_type: 'contract',
+          entity_id: id,
+          entity_label: contract.vendor_name,
+          action: 'delete',
+          summary: `Contract for ${contract.vendor_name} (${contract.annual_cost}/yr) was deleted`,
+          actor
+        })
         notifyContractDeleted(db, contract.vendor_name, contract.department_id, contract.branch_id).catch(() => {})
       }
       return { success: true }

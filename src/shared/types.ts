@@ -2,6 +2,16 @@
 
 export type UserRole = 'super_admin' | 'director' | 'store_manager'
 
+/**
+ * Role names from before the super_admin/director/store_manager rename.
+ * Permission checks still map these, so UI written against the old names
+ * keeps working; storage only ever holds a current UserRole.
+ */
+export type LegacyUserRole = 'admin' | 'editor' | 'viewer'
+
+/** Any role name accepted by a permission check. */
+export type PermissionRole = UserRole | LegacyUserRole
+
 export interface User {
   id: number
   name: string
@@ -111,6 +121,14 @@ export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'pending'
 
 export type RenewalType = 'fixed_term' | 'evergreen'
 
+/**
+ * Governance state, tracked separately from `status` so the date-driven
+ * lifecycle (active/expiring/expired) and the approval lifecycle can't
+ * overwrite each other. 'not_required' is the default for contracts that
+ * were never routed for approval.
+ */
+export type ApprovalState = 'not_required' | 'draft' | 'pending' | 'approved' | 'rejected'
+
 export interface Contract {
   id: number
   vendor_name: string
@@ -136,6 +154,16 @@ export interface Contract {
   // Computed (evergreen contracts with notice days only)
   cancellation_deadline?: string | null
   days_until_cancellation?: number | null
+  approval_state: ApprovalState
+  updated_at?: string | null
+  updated_by?: string
+}
+
+/** Identifies who performed an action, for the audit trail. */
+export interface Actor {
+  id: number
+  name: string
+  role: UserRole
 }
 
 export interface ContractLineItem {
@@ -260,6 +288,213 @@ export interface SigningRequest {
   sent_at?: string
   completed_at?: string
   created_at: string
+}
+
+// ─── Audit Trail ─────────────────────────────────────────────────────────────
+
+export type AuditEntityType =
+  | 'contract'
+  | 'user'
+  | 'budget'
+  | 'clause'
+  | 'approval'
+  | 'version'
+  | 'department'
+  | 'branch'
+  | 'note'
+  | 'settings'
+
+export type AuditAction =
+  | 'create'
+  | 'update'
+  | 'delete'
+  | 'submit'
+  | 'approve'
+  | 'reject'
+  | 'cancel'
+  | 'restore'
+  | 'archive'
+
+export interface AuditEntry {
+  id: number
+  entity_type: AuditEntityType
+  entity_id: number | null
+  entity_label: string
+  action: AuditAction
+  field_name: string | null
+  old_value: string | null
+  new_value: string | null
+  summary: string
+  user_id: number | null
+  user_name: string
+  created_at: string
+}
+
+export interface AuditFilter {
+  entity_type?: AuditEntityType
+  entity_id?: number
+  action?: AuditAction
+  user_id?: number
+  from_date?: string
+  to_date?: string
+  search?: string
+  limit?: number
+}
+
+// ─── Approval Workflows ──────────────────────────────────────────────────────
+
+export type ApprovalAmountField = 'annual_cost' | 'monthly_cost' | 'total_cost'
+
+export type ApprovalStepStatus = 'pending' | 'approved' | 'rejected' | 'skipped'
+
+export type ApprovalRequestStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+
+/**
+ * A routing rule. A contract submitted for approval collects every active rule
+ * whose scope, amount band, and vendor pattern it matches; those become the
+ * steps of its approval request, ordered by step_order.
+ */
+export interface ApprovalRule {
+  id: number
+  name: string
+  department_id: number | null
+  department_name?: string | null
+  branch_id: number | null
+  branch_name?: string | null
+  min_amount: number
+  max_amount: number | null // null = no upper bound
+  amount_field: ApprovalAmountField
+  vendor_pattern: string // '' = any vendor
+  approver_user_id: number | null
+  approver_name?: string | null
+  approver_role: UserRole | null // any user holding this role may decide
+  step_order: number
+  active: number
+  created_at: string
+}
+
+export interface ApprovalStep {
+  id: number
+  request_id: number
+  rule_id: number | null
+  rule_name: string
+  step_order: number
+  approver_user_id: number | null
+  approver_name?: string | null
+  approver_role: UserRole | null
+  status: ApprovalStepStatus
+  decided_by_user_id: number | null
+  decided_by_name: string
+  decided_at: string | null
+  comment: string
+}
+
+export interface ApprovalRequest {
+  id: number
+  contract_id: number
+  vendor_name?: string
+  annual_cost?: number
+  requested_by_user_id: number | null
+  requested_by_name: string
+  status: ApprovalRequestStatus
+  note: string
+  current_step: number
+  created_at: string
+  decided_at: string | null
+  steps?: ApprovalStep[]
+}
+
+/** One pending step surfaced in a user's approval inbox. */
+export interface PendingApproval {
+  step_id: number
+  request_id: number
+  contract_id: number
+  vendor_name: string
+  annual_cost: number
+  department_name: string | null
+  branch_name: string | null
+  rule_name: string
+  step_order: number
+  requested_by_name: string
+  requested_at: string
+  note: string
+}
+
+// ─── Contract Versions & Redlining ───────────────────────────────────────────
+
+// The diff engine lives in ./diff; re-exported here so consumers have one import.
+export type { DiffType, DiffSegment, DiffLineType, DiffLine, DiffStats } from './diff'
+
+export type VersionSource = 'manual' | 'upload' | 'template' | 'import'
+
+export interface ContractVersion {
+  id: number
+  contract_id: number
+  version_no: number
+  title: string
+  body: string
+  source: VersionSource
+  file_path: string | null
+  fields_snapshot: string // JSON blob of contract fields at capture time
+  change_summary: string
+  created_by_user_id: number | null
+  created_by_name: string
+  created_at: string
+}
+
+/** Snapshot of the contract's structured fields, stored alongside the document body. */
+export interface VersionFieldSnapshot {
+  vendor_name?: string
+  start_date?: string
+  end_date?: string
+  monthly_cost?: number
+  annual_cost?: number
+  total_cost?: number
+  poc_name?: string
+  poc_email?: string
+  poc_phone?: string
+  renewal_type?: RenewalType
+  cancellation_notice_days?: number
+}
+
+export interface FieldChange {
+  field: string
+  label: string
+  old_value: string
+  new_value: string
+}
+
+// ─── Clause Library ──────────────────────────────────────────────────────────
+
+export type ClauseType = 'standard' | 'fallback' | 'alternative'
+
+export type ClauseRisk = 'low' | 'medium' | 'high'
+
+export interface Clause {
+  id: number
+  title: string
+  category: string
+  body: string
+  clause_type: ClauseType
+  parent_id: number | null // fallback/alternative variants point at their standard
+  parent_title?: string | null
+  risk_level: ClauseRisk
+  tags: string
+  guidance: string // when to use this variant
+  is_archived: number
+  usage_count: number
+  created_by_name: string
+  created_at: string
+  updated_at: string | null
+  variants?: Clause[]
+}
+
+export interface ClauseFilter {
+  search?: string
+  category?: string
+  clause_type?: ClauseType
+  risk_level?: ClauseRisk
+  include_archived?: boolean
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

@@ -15,6 +15,10 @@ import { registerImportHandlers } from './ipc/importContracts'
 import { registerAssetHandlers } from './ipc/assets'
 import { registerExportHandlers } from './ipc/exports'
 import { registerContractCreationHandlers } from './ipc/contractCreation'
+import { registerAuditHandlers } from './ipc/audit'
+import { registerApprovalHandlers } from './ipc/approvals'
+import { registerVersionHandlers } from './ipc/versions'
+import { registerClauseHandlers } from './ipc/clauses'
 import { startScheduler, getUpcomingRenewals } from './scheduler'
 
 let mainWindow: BrowserWindow | null = null
@@ -78,6 +82,10 @@ app.whenReady().then(() => {
   registerAssetHandlers()
   registerExportHandlers()
   registerContractCreationHandlers()
+  registerAuditHandlers()
+  registerApprovalHandlers()
+  registerVersionHandlers()
+  registerClauseHandlers()
 
   // IPC for getting upcoming renewals (used by renderer)
   ipcMain.handle('scheduler:upcomingRenewals', () => {

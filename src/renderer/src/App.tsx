@@ -13,6 +13,9 @@ import ProjectsPage from './pages/ProjectsPage'
 import SettingsPage from './pages/SettingsPage'
 import OrgDetailPage from './pages/OrgDetailPage'
 import AssetsPage from './pages/AssetsPage'
+import ApprovalsPage from './pages/ApprovalsPage'
+import ClauseLibraryPage from './pages/ClauseLibraryPage'
+import AuditLogPage from './pages/AuditLogPage'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
@@ -48,6 +51,9 @@ export default function App() {
           <Route path="invoices" element={<InvoicesPage />} />
           <Route path="competitors" element={<CompetitorsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
+          <Route path="approvals" element={<ApprovalsPage />} />
+          <Route path="clauses" element={<ClauseLibraryPage />} />
+          <Route path="audit" element={<AuditLogPage />} />
           <Route path="settings" element={<SettingsPage />} />
           <Route path="assets" element={<AssetsPage />} />
           <Route path="department/:id" element={<OrgDetailPage type="department" />} />

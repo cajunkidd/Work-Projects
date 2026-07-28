@@ -9,6 +9,7 @@ import Modal from '../components/ui/Modal'
 import RoleGuard from '../components/layout/RoleGuard'
 import Badge from '../components/ui/Badge'
 import MonthlyBudgetSection from '../components/budget/MonthlyBudgetSection'
+import ApprovalRulesSection from '../components/settings/ApprovalRulesSection'
 import type { Department, Branch, User } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -403,6 +404,14 @@ export default function SettingsPage() {
         <section className="space-y-4">
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Monthly Budget</h2>
           <MonthlyBudgetSection departments={departments} branches={branches} />
+        </section>
+      </RoleGuard>
+
+      {/* ─── Approval Rules ─── */}
+      <RoleGuard minRole="super_admin">
+        <section className="space-y-4">
+          <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Approval Rules</h2>
+          <ApprovalRulesSection departments={departments} branches={branches} users={users} />
         </section>
       </RoleGuard>
 
