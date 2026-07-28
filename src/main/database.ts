@@ -150,6 +150,7 @@ function runMigrations(): void {
   runV3Migration()
   runV4Migration()
   runV5Migration()
+  runV7Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -369,13 +370,62 @@ function runV5Migration(): void {
   db.pragma('user_version = 5')
 }
 
+function runV7Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 7) return
+
+  // Evergreen renewal support on contracts
+  db.exec(`
+    ALTER TABLE contracts ADD COLUMN renewal_type
+      TEXT NOT NULL DEFAULT 'fixed_term'
+      CHECK(renewal_type IN ('fixed_term','evergreen'));
+
+    ALTER TABLE contracts ADD COLUMN cancellation_notice_days
+      INTEGER NOT NULL DEFAULT 0;
+  `)
+
+  // Per-month budget tracking
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS monthly_budget (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      department_id INTEGER REFERENCES departments(id) ON DELETE CASCADE,
+      branch_id INTEGER REFERENCES branches(id) ON DELETE CASCADE,
+      fiscal_year INTEGER NOT NULL,
+      month INTEGER NOT NULL CHECK(month BETWEEN 1 AND 12),
+      amount REAL NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(department_id, branch_id, fiscal_year, month)
+    );
+  `)
+
+  db.pragma('user_version = 7')
+}
+
 export function updateContractStatuses(): void {
   db.exec(`
+    -- Fixed-term: expire when past end_date
     UPDATE contracts SET status = 'expired'
-    WHERE date(end_date) < date('now') AND status != 'expired';
+    WHERE renewal_type = 'fixed_term'
+      AND date(end_date) < date('now') AND status != 'expired';
 
+    -- Evergreen: auto-renew — advance end_date by 1-year cycles until it's in the future
+    UPDATE contracts SET
+      end_date = date(end_date, '+' ||
+        (CAST((julianday('now') - julianday(end_date)) / 365.25 AS INTEGER) + 1) || ' years'),
+      status = 'active'
+    WHERE renewal_type = 'evergreen'
+      AND date(end_date) < date('now');
+
+    -- Fixed-term: expiring soon within 120 days of end_date
     UPDATE contracts SET status = 'expiring_soon'
-    WHERE date(end_date) BETWEEN date('now') AND date('now', '+120 days')
-    AND status = 'active';
+    WHERE renewal_type = 'fixed_term'
+      AND date(end_date) BETWEEN date('now') AND date('now', '+120 days')
+      AND status = 'active';
+
+    -- Evergreen: expiring soon within 120 days of the next renewal cycle
+    UPDATE contracts SET status = 'expiring_soon'
+    WHERE renewal_type = 'evergreen'
+      AND date(end_date) BETWEEN date('now') AND date('now', '+120 days')
+      AND status = 'active';
   `)
 }

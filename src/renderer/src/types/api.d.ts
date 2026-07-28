@@ -6,6 +6,8 @@ import type {
   Branch,
   Budget,
   BudgetSummary,
+  MonthlyBudget,
+  MonthlyBudgetSummary,
   Contract,
   ContractAllocation,
   ContractLineItem,
@@ -45,6 +47,10 @@ declare global {
         list: () => Promise<IpcResponse<Budget[]>>
         upsert: (payload: any) => Promise<IpcResponse<void>>
         summaries: (fiscal_year: number, filter?: { role: string; department_ids: number[]; branch_ids: number[] }) => Promise<IpcResponse<BudgetSummary[]>>
+        monthlyList: (opts: { fiscal_year: number; department_id?: number | null; branch_id?: number | null }) => Promise<IpcResponse<MonthlyBudget[]>>
+        monthlyUpsert: (payload: MonthlyBudget) => Promise<IpcResponse<void>>
+        monthlyBulkUpsert: (entries: MonthlyBudget[]) => Promise<IpcResponse<void>>
+        monthlySummary: (opts: { fiscal_year: number; department_id?: number | null; branch_id?: number | null }) => Promise<IpcResponse<MonthlyBudgetSummary[]>>
       }
       contracts: {
         list: (opts?: any) => Promise<IpcResponse<Contract[]>>

@@ -28,7 +28,11 @@ contextBridge.exposeInMainWorld('api', {
   budget: {
     list: () => ipcRenderer.invoke('budget:list'),
     upsert: (payload: any) => ipcRenderer.invoke('budget:upsert', payload),
-    summaries: (fiscal_year: number, filter?: any) => ipcRenderer.invoke('budget:summaries', fiscal_year, filter)
+    summaries: (fiscal_year: number, filter?: any) => ipcRenderer.invoke('budget:summaries', fiscal_year, filter),
+    monthlyList: (opts: any) => ipcRenderer.invoke('monthlyBudget:list', opts),
+    monthlyUpsert: (payload: any) => ipcRenderer.invoke('monthlyBudget:upsert', payload),
+    monthlyBulkUpsert: (entries: any[]) => ipcRenderer.invoke('monthlyBudget:bulkUpsert', entries),
+    monthlySummary: (opts: any) => ipcRenderer.invoke('monthlyBudget:summary', opts)
   },
 
   // Contracts

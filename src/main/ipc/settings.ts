@@ -204,24 +204,35 @@ export function registerSettingsHandlers(): void {
     async (_e, opts: { fiscal_year: number; department_id?: number; branch_id?: number }): Promise<IpcResponse<{ month: string; amount: number }[]>> => {
       try {
         const db = getDb()
-        let query = `
-          SELECT
-            strftime('%Y-%m', start_date) as month,
-            SUM(monthly_cost) as amount
-          FROM contracts
-          WHERE strftime('%Y', start_date) = ?
-          AND status != 'expired'
-        `
-        const params: (string | number)[] = [String(opts.fiscal_year)]
+        // Generate all 12 months of the fiscal year, then join contracts active
+        // during each month: start_date <= last day of month AND end_date >= first day.
+        let filterClause = ''
+        const params: (string | number)[] = [opts.fiscal_year, opts.fiscal_year, opts.fiscal_year]
         if (opts.department_id) {
-          query += ' AND department_id = ?'
+          filterClause += ' AND c.department_id = ?'
           params.push(opts.department_id)
         }
         if (opts.branch_id) {
-          query += ' AND branch_id = ?'
+          filterClause += ' AND c.branch_id = ?'
           params.push(opts.branch_id)
         }
-        query += " GROUP BY month ORDER BY month"
+        const query = `
+          WITH RECURSIVE months(m) AS (
+            SELECT 1 UNION ALL SELECT m+1 FROM months WHERE m < 12
+          )
+          SELECT
+            printf('%04d-%02d', ?, m.m) as month,
+            COALESCE(SUM(c.monthly_cost), 0) as amount
+          FROM months m
+          LEFT JOIN contracts c ON
+            date(c.start_date) <= date(printf('%04d-%02d-15', ?, m.m),
+              'start of month', '+1 month', '-1 day')
+            AND date(c.end_date) >= date(printf('%04d-%02d-01', ?, m.m),
+              'start of month')
+            AND c.status != 'expired'
+            ${filterClause}
+          GROUP BY m.m ORDER BY m.m
+        `
         const rows = db.prepare(query).all(...params) as { month: string; amount: number }[]
         return { success: true, data: rows }
       } catch (err: any) {

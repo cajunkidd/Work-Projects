@@ -50,7 +50,16 @@ export function registerContractHandlers(): void {
         let query = `
           SELECT c.*, d.name as department_name, br.name as branch_name,
             (SELECT COUNT(*) FROM vendor_notes WHERE contract_id = c.id) as notes_count,
-            CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal
+            CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal,
+            CASE WHEN c.renewal_type = 'evergreen' AND c.cancellation_notice_days > 0
+              THEN date(c.end_date, '-' || c.cancellation_notice_days || ' days')
+              ELSE NULL
+            END as cancellation_deadline,
+            CASE WHEN c.renewal_type = 'evergreen' AND c.cancellation_notice_days > 0
+              THEN CAST(julianday(c.end_date, '-' || c.cancellation_notice_days || ' days')
+                - julianday('now') AS INTEGER)
+              ELSE NULL
+            END as days_until_cancellation
           FROM contracts c
           LEFT JOIN departments d ON c.department_id = d.id
           LEFT JOIN branches br ON c.branch_id = br.id
@@ -117,7 +126,16 @@ export function registerContractHandlers(): void {
       const row = getDb()
         .prepare(
           `SELECT c.*, d.name as department_name, br.name as branch_name,
-            CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal
+            CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal,
+            CASE WHEN c.renewal_type = 'evergreen' AND c.cancellation_notice_days > 0
+              THEN date(c.end_date, '-' || c.cancellation_notice_days || ' days')
+              ELSE NULL
+            END as cancellation_deadline,
+            CASE WHEN c.renewal_type = 'evergreen' AND c.cancellation_notice_days > 0
+              THEN CAST(julianday(c.end_date, '-' || c.cancellation_notice_days || ' days')
+                - julianday('now') AS INTEGER)
+              ELSE NULL
+            END as days_until_cancellation
            FROM contracts c
            LEFT JOIN departments d ON c.department_id = d.id
            LEFT JOIN branches br ON c.branch_id = br.id
@@ -140,8 +158,9 @@ export function registerContractHandlers(): void {
           .prepare(
             `INSERT INTO contracts
              (vendor_name, status, start_date, end_date, monthly_cost, annual_cost, total_cost,
-              poc_name, poc_email, poc_phone, department_id, branch_id, file_path)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              poc_name, poc_email, poc_phone, department_id, branch_id, file_path,
+              renewal_type, cancellation_notice_days)
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
           )
           .run(
             payload.vendor_name,
@@ -156,7 +175,9 @@ export function registerContractHandlers(): void {
             payload.poc_phone,
             payload.department_id ?? null,
             payload.branch_id ?? null,
-            payload.file_path || null
+            payload.file_path || null,
+            payload.renewal_type ?? 'fixed_term',
+            payload.cancellation_notice_days ?? 0
           )
         const row = db
           .prepare('SELECT * FROM contracts WHERE id = ?')

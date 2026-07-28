@@ -1,7 +1,16 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { notifyBudgetUpdated } from '../emailNotifier'
-import type { IpcResponse, Budget, BudgetSummary, Department, Branch, ContractAllocation } from '../../shared/types'
+import type {
+  IpcResponse,
+  Budget,
+  BudgetSummary,
+  Department,
+  Branch,
+  ContractAllocation,
+  MonthlyBudget,
+  MonthlyBudgetSummary
+} from '../../shared/types'
 
 export function registerBudgetHandlers(): void {
   // Departments CRUD
@@ -326,6 +335,167 @@ export function registerBudgetHandlers(): void {
           )
           .all(contract_id) as ContractAllocation[]
         return { success: true, data: rows }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  // ── Monthly Budget ─────────────────────────────────────────────────────────
+
+  ipcMain.handle(
+    'monthlyBudget:list',
+    async (
+      _e,
+      opts: { fiscal_year: number; department_id?: number | null; branch_id?: number | null }
+    ): Promise<IpcResponse<MonthlyBudget[]>> => {
+      try {
+        const db = getDb()
+        let query = 'SELECT * FROM monthly_budget WHERE fiscal_year = ?'
+        const params: (string | number)[] = [opts.fiscal_year]
+        if (opts.department_id != null) {
+          query += ' AND department_id = ?'
+          params.push(opts.department_id)
+        } else {
+          query += ' AND department_id IS NULL'
+        }
+        if (opts.branch_id != null) {
+          query += ' AND branch_id = ?'
+          params.push(opts.branch_id)
+        } else {
+          query += ' AND branch_id IS NULL'
+        }
+        query += ' ORDER BY month'
+        const rows = db.prepare(query).all(...params) as MonthlyBudget[]
+        return { success: true, data: rows }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  // UPDATE-then-INSERT rather than ON CONFLICT: SQLite treats NULLs as distinct
+  // in UNIQUE constraints, so ON CONFLICT never fires for company-level rows
+  // (NULL department_id + NULL branch_id) and would duplicate them on every save.
+  const upsertMonthly = (r: MonthlyBudget): void => {
+    const db = getDb()
+    const info = db
+      .prepare(
+        `UPDATE monthly_budget SET amount = ?
+         WHERE department_id IS ? AND branch_id IS ? AND fiscal_year = ? AND month = ?`
+      )
+      .run(r.amount, r.department_id ?? null, r.branch_id ?? null, r.fiscal_year, r.month)
+    if (info.changes === 0) {
+      db.prepare(
+        `INSERT INTO monthly_budget (department_id, branch_id, fiscal_year, month, amount)
+         VALUES (?, ?, ?, ?, ?)`
+      ).run(r.department_id ?? null, r.branch_id ?? null, r.fiscal_year, r.month, r.amount)
+    }
+  }
+
+  ipcMain.handle(
+    'monthlyBudget:upsert',
+    async (_e, payload: MonthlyBudget): Promise<IpcResponse<void>> => {
+      try {
+        getDb().transaction(() => upsertMonthly(payload))()
+        return { success: true }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'monthlyBudget:bulkUpsert',
+    async (_e, entries: MonthlyBudget[]): Promise<IpcResponse<void>> => {
+      try {
+        const db = getDb()
+        db.transaction((rows: MonthlyBudget[]) => {
+          for (const r of rows) upsertMonthly(r)
+        })(entries)
+        return { success: true }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'monthlyBudget:summary',
+    async (
+      _e,
+      opts: { fiscal_year: number; department_id?: number | null; branch_id?: number | null }
+    ): Promise<IpcResponse<MonthlyBudgetSummary[]>> => {
+      try {
+        const db = getDb()
+
+        // Actual committed spend per month: contracts active during each month
+        // (same active-contract logic as the dashboard spend trend).
+        let contractFilter = ''
+        const actualParams: (string | number)[] = [opts.fiscal_year, opts.fiscal_year]
+        if (opts.department_id != null) {
+          contractFilter += ' AND c.department_id = ?'
+          actualParams.push(opts.department_id)
+        }
+        if (opts.branch_id != null) {
+          contractFilter += ' AND c.branch_id = ?'
+          actualParams.push(opts.branch_id)
+        }
+        const actualRows = db
+          .prepare(
+            `WITH RECURSIVE months(m) AS (
+               SELECT 1 UNION ALL SELECT m+1 FROM months WHERE m < 12
+             )
+             SELECT m.m as month, COALESCE(SUM(c.monthly_cost), 0) as actual
+             FROM months m
+             LEFT JOIN contracts c ON
+               date(c.start_date) <= date(printf('%04d-%02d-15', ?, m.m),
+                 'start of month', '+1 month', '-1 day')
+               AND date(c.end_date) >= date(printf('%04d-%02d-01', ?, m.m),
+                 'start of month')
+               AND c.status != 'expired'
+               ${contractFilter}
+             GROUP BY m.m ORDER BY m.m`
+          )
+          .all(...actualParams) as { month: number; actual: number }[]
+
+        // Budgeted amounts per month for the same dept/branch scope
+        let budgetQuery = 'SELECT month, amount FROM monthly_budget WHERE fiscal_year = ?'
+        const budgetParams: (string | number)[] = [opts.fiscal_year]
+        if (opts.department_id != null) {
+          budgetQuery += ' AND department_id = ?'
+          budgetParams.push(opts.department_id)
+        } else {
+          budgetQuery += ' AND department_id IS NULL'
+        }
+        if (opts.branch_id != null) {
+          budgetQuery += ' AND branch_id = ?'
+          budgetParams.push(opts.branch_id)
+        } else {
+          budgetQuery += ' AND branch_id IS NULL'
+        }
+        const budgetRows = db.prepare(budgetQuery).all(...budgetParams) as {
+          month: number
+          amount: number
+        }[]
+        const budgetByMonth = new Map(budgetRows.map((r) => [r.month, r.amount]))
+
+        const MONTH_LABELS = [
+          'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+        ]
+        const summary: MonthlyBudgetSummary[] = actualRows.map((r) => {
+          const budgeted = budgetByMonth.get(r.month) ?? 0
+          return {
+            month: r.month,
+            month_label: MONTH_LABELS[r.month - 1],
+            budgeted,
+            actual: r.actual,
+            variance: r.actual - budgeted,
+            remaining: budgeted - r.actual
+          }
+        })
+        return { success: true, data: summary }
       } catch (err: any) {
         return { success: false, error: err.message }
       }

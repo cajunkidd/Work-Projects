@@ -45,6 +45,25 @@ export interface Budget {
   created_at: string
 }
 
+export interface MonthlyBudget {
+  id?: number
+  department_id: number | null
+  branch_id: number | null
+  fiscal_year: number
+  month: number // 1-12
+  amount: number
+  created_at?: string
+}
+
+export interface MonthlyBudgetSummary {
+  month: number
+  month_label: string // e.g. 'Jan', 'Feb'
+  budgeted: number
+  actual: number
+  variance: number  // actual - budgeted
+  remaining: number // budgeted - actual
+}
+
 export interface BudgetSummary {
   department_id: number | null
   department_name: string | null
@@ -90,6 +109,8 @@ export interface BranchAsset {
 
 export type ContractStatus = 'active' | 'expiring_soon' | 'expired' | 'pending'
 
+export type RenewalType = 'fixed_term' | 'evergreen'
+
 export interface Contract {
   id: number
   vendor_name: string
@@ -110,6 +131,11 @@ export interface Contract {
   notes_count?: number
   created_at: string
   days_until_renewal?: number
+  renewal_type: RenewalType
+  cancellation_notice_days: number
+  // Computed (evergreen contracts with notice days only)
+  cancellation_deadline?: string | null
+  days_until_cancellation?: number | null
 }
 
 export interface ContractLineItem {
