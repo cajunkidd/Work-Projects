@@ -8,6 +8,8 @@ import {
   notifyContractDeleted
 } from '../emailNotifier'
 import { recordAudit, recordFieldChanges } from '../audit'
+import { dispatchWebhook } from '../webhooks'
+import { linkContractToVendor } from '../vendorLink'
 import type {
   Actor,
   IpcResponse,
@@ -188,6 +190,8 @@ export function registerContractHandlers(): void {
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(result.lastInsertRowid) as Contract
 
+        linkContractToVendor(db, row.id, row.vendor_name)
+
         recordAudit(db, {
           entity_type: 'contract',
           entity_id: row.id,
@@ -197,6 +201,7 @@ export function registerContractHandlers(): void {
           actor: payload.actor
         })
 
+        dispatchWebhook(db, 'contract.created', { contract: row })
         notifyContractCreated(db, row).catch(() => {})
         return { success: true, data: row }
       } catch (err: any) {
@@ -239,8 +244,13 @@ export function registerContractHandlers(): void {
           `UPDATE contracts SET ${sets}, updated_at = datetime('now'), updated_by = ? WHERE id = ?`
         ).run(...values, payload.actor?.name ?? 'System', payload.id)
 
+        // A renamed vendor re-resolves to (or creates) the matching record.
+        if (payload.vendor_name && payload.vendor_name !== current?.vendor_name) {
+          linkContractToVendor(db, payload.id, payload.vendor_name)
+        }
+
         if (current) {
-          recordFieldChanges(db, {
+          const changed = recordFieldChanges(db, {
             entity_type: 'contract',
             entity_id: payload.id,
             entity_label: current.vendor_name,
@@ -249,6 +259,13 @@ export function registerContractHandlers(): void {
             fields,
             actor: payload.actor
           })
+          if (changed.length > 0) {
+            dispatchWebhook(db, 'contract.updated', {
+              contract_id: payload.id,
+              vendor_name: payload.vendor_name ?? current.vendor_name,
+              changed_fields: changed
+            })
+          }
           notifyContractUpdated(db, current, fields).catch(() => {})
         }
         return { success: true }
@@ -276,6 +293,11 @@ export function registerContractHandlers(): void {
           action: 'delete',
           summary: `Contract for ${contract.vendor_name} (${contract.annual_cost}/yr) was deleted`,
           actor
+        })
+        dispatchWebhook(db, 'contract.deleted', {
+          contract_id: id,
+          vendor_name: contract.vendor_name,
+          annual_cost: contract.annual_cost
         })
         notifyContractDeleted(db, contract.vendor_name, contract.department_id, contract.branch_id).catch(() => {})
       }

@@ -4,6 +4,11 @@ A Windows desktop application for directors and teams to manage company and depa
 
 ## Features
 
+- **AI contract extraction** — reads an uploaded agreement (including scanned PDFs) and pulls out terms, obligations, and risk flags for review
+- **Document vault with full-text search** — files are copied into managed storage and their contents indexed, so search covers what's *inside* every document
+- **Obligation tracking** — deliverables, milestones, SLAs, and compliance duties with owners, due dates, and recurrence
+- **Vendor records** — one entity per supplier with contacts, contract roll-ups, and duplicate detection/merge
+- **Integrations** — emailed renewal and obligation reminders, an .ics calendar feed, and signed outbound webhooks
 - **Approval workflows** — configurable routing rules (by scope, cost band, and vendor) send a contract through sequential sign-off before it goes active
 - **Version control & redlining** — capture each draft, compare any two versions as a word-level redline, restore prior terms
 - **Audit trail** — append-only log of every change: who, what, before/after, and when
@@ -41,6 +46,19 @@ npm run dev
 
 ### First launch
 On first launch, you'll be prompted to create an Admin account. This is the only time the setup screen appears.
+
+---
+
+## AI Extraction Setup (optional)
+
+Contract term extraction uses the Anthropic API.
+
+1. Get an API key from [console.anthropic.com](https://console.anthropic.com/)
+2. In the app: **Settings → AI Extraction** — paste the key, pick a model, and click **Test Connection**
+
+Alternatively set an `ANTHROPIC_API_KEY` environment variable before launching; it takes precedence over the stored key and is never written to the database.
+
+Extraction is billed by Anthropic per token. Without a key the rest of the app works normally — only the **Extract Terms** button is disabled.
 
 ---
 

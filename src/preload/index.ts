@@ -191,5 +191,68 @@ contextBridge.exposeInMainWorld('api', {
     delete: (payload: any) => ipcRenderer.invoke('clauses:delete', payload),
     categories: () => ipcRenderer.invoke('clauses:categories'),
     recordUsage: (id: number) => ipcRenderer.invoke('clauses:recordUsage', id)
+  },
+
+  // Vendors
+  vendors: {
+    list: (opts?: any) => ipcRenderer.invoke('vendors:list', opts),
+    get: (id: number) => ipcRenderer.invoke('vendors:get', id),
+    create: (payload: any) => ipcRenderer.invoke('vendors:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('vendors:update', payload),
+    delete: (payload: any) => ipcRenderer.invoke('vendors:delete', payload),
+    merge: (payload: any) => ipcRenderer.invoke('vendors:merge', payload),
+    findDuplicates: () => ipcRenderer.invoke('vendors:findDuplicates'),
+    createContact: (payload: any) => ipcRenderer.invoke('vendorContacts:create', payload),
+    deleteContact: (id: number) => ipcRenderer.invoke('vendorContacts:delete', id)
+  },
+
+  // Documents & full-text search
+  documents: {
+    upload: (payload: any) => ipcRenderer.invoke('documents:upload', payload),
+    list: (opts?: any) => ipcRenderer.invoke('documents:list', opts),
+    get: (id: number) => ipcRenderer.invoke('documents:get', id),
+    search: (opts: any) => ipcRenderer.invoke('documents:search', opts),
+    indexStats: () => ipcRenderer.invoke('documents:indexStats'),
+    open: (id: number) => ipcRenderer.invoke('documents:open', id),
+    saveAs: (id: number) => ipcRenderer.invoke('documents:saveAs', id),
+    update: (payload: any) => ipcRenderer.invoke('documents:update', payload),
+    delete: (payload: any) => ipcRenderer.invoke('documents:delete', payload),
+    reindex: (id: number) => ipcRenderer.invoke('documents:reindex', id)
+  },
+
+  // Obligations & milestones
+  obligations: {
+    list: (filter?: any) => ipcRenderer.invoke('obligations:list', filter),
+    create: (payload: any) => ipcRenderer.invoke('obligations:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('obligations:update', payload),
+    complete: (payload: any) => ipcRenderer.invoke('obligations:complete', payload),
+    delete: (payload: any) => ipcRenderer.invoke('obligations:delete', payload),
+    stats: () => ipcRenderer.invoke('obligations:stats')
+  },
+
+  // AI extraction
+  ai: {
+    settings: () => ipcRenderer.invoke('ai:settings'),
+    test: () => ipcRenderer.invoke('ai:test'),
+    defaults: () => ipcRenderer.invoke('ai:defaults')
+  },
+  extraction: {
+    run: (payload: any) => ipcRenderer.invoke('extraction:run', payload),
+    history: (opts?: any) => ipcRenderer.invoke('extraction:history', opts),
+    apply: (payload: any) => ipcRenderer.invoke('extraction:apply', payload)
+  },
+
+  // Integrations
+  calendar: {
+    export: (options: any) => ipcRenderer.invoke('calendar:export', options),
+    preview: (options: any) => ipcRenderer.invoke('calendar:preview', options)
+  },
+  webhooks: {
+    list: () => ipcRenderer.invoke('webhooks:list'),
+    create: (payload: any) => ipcRenderer.invoke('webhooks:create', payload),
+    update: (payload: any) => ipcRenderer.invoke('webhooks:update', payload),
+    delete: (payload: any) => ipcRenderer.invoke('webhooks:delete', payload),
+    test: (id: number) => ipcRenderer.invoke('webhooks:test', id),
+    deliveries: (webhook_id: number) => ipcRenderer.invoke('webhooks:deliveries', webhook_id)
   }
 })

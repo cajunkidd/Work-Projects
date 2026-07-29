@@ -20,12 +20,16 @@ import AllocationEditor, { type AllocationRow } from '../components/contracts/Al
 import ApprovalTab from '../components/contracts/ApprovalTab'
 import VersionsTab from '../components/contracts/VersionsTab'
 import HistoryTab from '../components/contracts/HistoryTab'
+import DocumentsTab from '../components/contracts/DocumentsTab'
+import ObligationsTab from '../components/contracts/ObligationsTab'
 import { useActor } from '../lib/actor'
 
 const BASE_TABS = [
   'Overview',
   'Line Items',
   'Approvals',
+  'Documents',
+  'Obligations',
   'Versions',
   'Renewals',
   'Notes',
@@ -468,6 +472,12 @@ export default function ContractDetailPage() {
       {activeTab === 'Versions' && (
         <VersionsTab contractId={contractId} onContractChanged={reloadContract} />
       )}
+
+      {activeTab === 'Documents' && (
+        <DocumentsTab contract={contract} onContractChanged={reloadContract} />
+      )}
+
+      {activeTab === 'Obligations' && <ObligationsTab contractId={contractId} />}
 
       {activeTab === 'History' && <HistoryTab contractId={contractId} />}
 

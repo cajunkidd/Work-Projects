@@ -10,6 +10,7 @@ import RoleGuard from '../components/layout/RoleGuard'
 import Badge from '../components/ui/Badge'
 import MonthlyBudgetSection from '../components/budget/MonthlyBudgetSection'
 import ApprovalRulesSection from '../components/settings/ApprovalRulesSection'
+import IntegrationsSection from '../components/settings/IntegrationsSection'
 import type { Department, Branch, User } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -413,6 +414,11 @@ export default function SettingsPage() {
           <h2 className="text-white font-semibold text-lg border-b border-slate-800 pb-2">Approval Rules</h2>
           <ApprovalRulesSection departments={departments} branches={branches} users={users} />
         </section>
+      </RoleGuard>
+
+      {/* ─── AI, Calendar & Webhooks ─── */}
+      <RoleGuard minRole="super_admin">
+        <IntegrationsSection />
       </RoleGuard>
 
       {/* ─── Gmail ─── */}

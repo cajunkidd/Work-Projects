@@ -168,6 +168,92 @@ function fmtCost(n: number): string {
 // ─── Public notification helpers ──────────────────────────────────────────────
 
 /**
+ * Renewal / cancellation-deadline reminder. Previously these fired only as
+ * desktop toasts, which meant anyone whose app happened to be closed at 9 AM
+ * never heard about them.
+ */
+export async function notifyRenewalDue(
+  db: Database,
+  payload: {
+    vendor_name: string
+    end_date: string
+    annual_cost: number
+    department_id: number | null
+    branch_id: number | null
+    days_out: number
+    kind: 'renewal' | 'cancellation'
+    cancellation_deadline?: string
+    notice_days?: number
+  }
+): Promise<void> {
+  const to = getUserEmailsToNotify(db, payload.department_id, payload.branch_id)
+
+  const rows = [
+    { label: 'Vendor', value: payload.vendor_name },
+    { label: 'Scope', value: scopeLabel(db, payload.department_id, payload.branch_id) },
+    { label: 'Annual Cost', value: fmtCost(payload.annual_cost) }
+  ]
+
+  if (payload.kind === 'cancellation') {
+    rows.push(
+      { label: 'Auto-renews On', value: payload.end_date },
+      { label: 'Cancel By', value: payload.cancellation_deadline ?? '—' },
+      { label: 'Notice Required', value: `${payload.notice_days ?? 0} days` }
+    )
+  } else {
+    rows.push({ label: 'Expires On', value: payload.end_date })
+  }
+
+  const title =
+    payload.kind === 'cancellation'
+      ? `Cancellation Deadline in ${payload.days_out} Days`
+      : `Contract Renewal in ${payload.days_out} Days`
+
+  const subject =
+    payload.kind === 'cancellation'
+      ? `Action needed in ${payload.days_out} days: cancel ${payload.vendor_name}?`
+      : `Renewal in ${payload.days_out} days: ${payload.vendor_name}`
+
+  await sendEmail(db, to, subject, emailTemplate(title, rows)).catch(() => {})
+}
+
+/** Daily digest of obligations that are due soon or already overdue. */
+export async function notifyObligationsDue(
+  db: Database,
+  payload: {
+    obligations: {
+      title: string
+      vendor_name: string
+      due_date: string
+      owner_name: string
+      responsible_party: string
+      days_out: number
+      overdue: boolean
+    }[]
+    to: string[]
+  }
+): Promise<void> {
+  if (payload.obligations.length === 0 || payload.to.length === 0) return
+
+  const rows = payload.obligations.map((item) => ({
+    label: item.overdue ? `OVERDUE by ${Math.abs(item.days_out)}d` : `Due in ${item.days_out}d`,
+    value: `${item.title} — ${item.vendor_name} (${item.due_date})${
+      item.owner_name ? `, owner ${item.owner_name}` : ''
+    }`
+  }))
+
+  const overdueCount = payload.obligations.filter((o) => o.overdue).length
+  const subject =
+    overdueCount > 0
+      ? `${overdueCount} overdue contract obligation${overdueCount === 1 ? '' : 's'}`
+      : `${payload.obligations.length} contract obligation${payload.obligations.length === 1 ? '' : 's'} due soon`
+
+  await sendEmail(db, payload.to, subject, emailTemplate('Contract Obligations', rows)).catch(
+    () => {}
+  )
+}
+
+/**
  * Tells the approvers on the current step that a contract is waiting on them.
  * Recipients are resolved from the step assignment (a named user, or every user
  * holding the step's role) rather than from department/branch scope.

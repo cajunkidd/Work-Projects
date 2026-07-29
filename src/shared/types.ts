@@ -154,6 +154,7 @@ export interface Contract {
   // Computed (evergreen contracts with notice days only)
   cancellation_deadline?: string | null
   days_until_cancellation?: number | null
+  vendor_id?: number | null
   approval_state: ApprovalState
   updated_at?: string | null
   updated_by?: string
@@ -260,6 +261,12 @@ export interface AppSettings {
   // E-Signature (Documenso)
   documenso_url?: string
   documenso_api_key?: string
+  // AI extraction (Anthropic)
+  anthropic_api_key?: string
+  anthropic_model?: string
+  anthropic_effort?: string
+  // Calendar feed
+  calendar_feed_path?: string
 }
 
 // ─── Contract Builder / E-Signature ─────────────────────────────────────────
@@ -495,6 +502,260 @@ export interface ClauseFilter {
   clause_type?: ClauseType
   risk_level?: ClauseRisk
   include_archived?: boolean
+}
+
+// ─── Vendors ─────────────────────────────────────────────────────────────────
+
+export type VendorStatus = 'active' | 'inactive' | 'do_not_use'
+
+export interface Vendor {
+  id: number
+  name: string
+  normalized_name: string
+  website: string
+  email: string
+  phone: string
+  address: string
+  account_number: string
+  tax_id: string
+  category: string
+  status: VendorStatus
+  rating: number | null
+  notes: string
+  created_at: string
+  updated_at: string | null
+  // Roll-ups (populated by the list/get queries)
+  contract_count?: number
+  active_contract_count?: number
+  total_annual_cost?: number
+  next_renewal?: string | null
+  contacts?: VendorContact[]
+}
+
+export interface VendorContact {
+  id: number
+  vendor_id: number
+  name: string
+  title: string
+  email: string
+  phone: string
+  is_primary: number
+  notes: string
+  created_at: string
+}
+
+// ─── Documents & Full-Text Search ────────────────────────────────────────────
+
+export type DocumentType =
+  | 'contract'
+  | 'amendment'
+  | 'sow'
+  | 'invoice'
+  | 'quote'
+  | 'correspondence'
+  | 'other'
+
+export type ExtractionStatus = 'pending' | 'extracted' | 'no_text_layer' | 'failed'
+
+export interface ContractDocument {
+  id: number
+  contract_id: number | null
+  vendor_id: number | null
+  vendor_name?: string | null
+  title: string
+  doc_type: DocumentType
+  original_path: string | null
+  stored_path: string
+  file_hash: string
+  file_size: number
+  mime_type: string
+  page_count: number | null
+  extracted_text: string
+  extraction_status: ExtractionStatus
+  extraction_note: string
+  uploaded_by_user_id: number | null
+  uploaded_by_name: string
+  created_at: string
+}
+
+/** One full-text hit, with a highlighted snippet around the match. */
+export interface DocumentSearchHit {
+  id: number
+  contract_id: number | null
+  vendor_id: number | null
+  vendor_name: string | null
+  title: string
+  doc_type: DocumentType
+  file_size: number
+  page_count: number | null
+  created_at: string
+  snippet: string
+  score: number
+}
+
+// ─── Obligations & Milestones ────────────────────────────────────────────────
+
+export type ObligationType =
+  | 'deliverable'
+  | 'milestone'
+  | 'sla'
+  | 'payment'
+  | 'compliance'
+  | 'renewal_task'
+  | 'other'
+
+export type ResponsibleParty = 'us' | 'vendor' | 'both'
+
+export type ObligationStatus = 'open' | 'in_progress' | 'completed' | 'waived'
+
+export type ObligationRecurrence = 'none' | 'monthly' | 'quarterly' | 'semiannual' | 'annual'
+
+export interface Obligation {
+  id: number
+  contract_id: number
+  vendor_name?: string
+  title: string
+  description: string
+  obligation_type: ObligationType
+  responsible_party: ResponsibleParty
+  owner_user_id: number | null
+  owner_name: string
+  due_date: string | null
+  recurrence: ObligationRecurrence
+  status: ObligationStatus
+  completed_at: string | null
+  completed_by_name: string
+  reminder_days: number
+  critical: number
+  source: 'manual' | 'ai_extracted'
+  source_document_id: number | null
+  created_at: string
+  updated_at: string | null
+  // Computed
+  days_until_due?: number | null
+  is_overdue?: number
+}
+
+export interface ObligationFilter {
+  contract_id?: number
+  status?: ObligationStatus
+  obligation_type?: ObligationType
+  owner_user_id?: number
+  overdue_only?: boolean
+  due_within_days?: number
+  search?: string
+}
+
+// ─── AI Extraction ───────────────────────────────────────────────────────────
+
+export type ExtractionRunStatus = 'running' | 'completed' | 'failed' | 'refused'
+
+export interface ExtractionRun {
+  id: number
+  document_id: number | null
+  contract_id: number | null
+  status: ExtractionRunStatus
+  model: string
+  effort: string
+  input_tokens: number
+  output_tokens: number
+  result_json: string
+  error: string
+  created_by_name: string
+  created_at: string
+  completed_at: string | null
+}
+
+/** A term the model pulled out of a document, with its confidence and evidence. */
+export interface ExtractedTerm<T = string> {
+  value: T | null
+  confidence: 'high' | 'medium' | 'low'
+  evidence: string
+}
+
+export interface ExtractedObligation {
+  title: string
+  description: string
+  obligation_type: ObligationType
+  responsible_party: ResponsibleParty
+  due_date: string | null
+  recurrence: ObligationRecurrence
+  critical: boolean
+  evidence: string
+}
+
+/** The structured result the model returns for a contract document. */
+export interface ExtractionResult {
+  vendor_name: ExtractedTerm
+  counterparty_name: ExtractedTerm
+  effective_date: ExtractedTerm
+  expiration_date: ExtractedTerm
+  renewal_type: ExtractedTerm
+  cancellation_notice_days: ExtractedTerm<number>
+  annual_value: ExtractedTerm<number>
+  monthly_value: ExtractedTerm<number>
+  total_value: ExtractedTerm<number>
+  payment_terms: ExtractedTerm
+  governing_law: ExtractedTerm
+  liability_cap: ExtractedTerm
+  contact_name: ExtractedTerm
+  contact_email: ExtractedTerm
+  contact_phone: ExtractedTerm
+  obligations: ExtractedObligation[]
+  risk_flags: { severity: 'low' | 'medium' | 'high'; issue: string; evidence: string }[]
+  summary: string
+}
+
+export interface AiSettings {
+  configured: boolean
+  model: string
+  effort: string
+}
+
+// ─── Integrations: Webhooks ──────────────────────────────────────────────────
+
+export type WebhookEvent =
+  | 'contract.created'
+  | 'contract.updated'
+  | 'contract.deleted'
+  | 'contract.submitted'
+  | 'contract.approved'
+  | 'contract.rejected'
+  | 'renewal.upcoming'
+  | 'obligation.due'
+  | 'obligation.completed'
+  | 'vendor.created'
+
+export interface Webhook {
+  id: number
+  name: string
+  url: string
+  secret: string
+  events: string // JSON array of WebhookEvent
+  active: number
+  last_status: number | null
+  last_error: string
+  last_fired_at: string | null
+  created_at: string
+}
+
+export interface WebhookDelivery {
+  id: number
+  webhook_id: number
+  event: string
+  payload: string
+  status_code: number | null
+  error: string
+  created_at: string
+}
+
+// ─── Integrations: Calendar ──────────────────────────────────────────────────
+
+export interface CalendarFeedOptions {
+  include_renewals: boolean
+  include_cancellation_deadlines: boolean
+  include_obligations: boolean
+  reminder_minutes: number
 }
 
 // ─── Dashboard ───────────────────────────────────────────────────────────────

@@ -4,9 +4,18 @@ import path from 'path'
 import fs from 'fs'
 
 let db: Database.Database
+let dbDirectory: string
 
 export function getDb(): Database.Database {
   return db
+}
+
+/**
+ * Directory holding the database file. Managed document storage lives beside
+ * it so a team pointing at a shared network database also shares the documents.
+ */
+export function getDbDirectory(): string {
+  return dbDirectory
 }
 
 export function initDatabase(customPath?: string): void {
@@ -18,6 +27,7 @@ export function initDatabase(customPath?: string): void {
   if (!fs.existsSync(dbDir)) {
     fs.mkdirSync(dbDir, { recursive: true })
   }
+  dbDirectory = dbDir
 
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
@@ -152,6 +162,7 @@ function runMigrations(): void {
   runV5Migration()
   runV7Migration()
   runV8Migration()
+  runV9Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -713,6 +724,246 @@ function seedStarterClauses(): void {
   })
 
   seed()
+}
+
+/**
+ * Vendor records, managed document storage with full-text search, obligation
+ * tracking, AI extraction history, and outbound webhooks.
+ */
+function runV9Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 9) return
+
+  // ─── Vendors as first-class records ────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS vendors (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      normalized_name TEXT NOT NULL DEFAULT '',
+      website TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      address TEXT NOT NULL DEFAULT '',
+      account_number TEXT NOT NULL DEFAULT '',
+      tax_id TEXT NOT NULL DEFAULT '',
+      category TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'active'
+        CHECK(status IN ('active','inactive','do_not_use')),
+      rating INTEGER,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS vendor_contacts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      vendor_id INTEGER NOT NULL REFERENCES vendors(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      title TEXT NOT NULL DEFAULT '',
+      email TEXT NOT NULL DEFAULT '',
+      phone TEXT NOT NULL DEFAULT '',
+      is_primary INTEGER NOT NULL DEFAULT 0,
+      notes TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_vendor_contacts ON vendor_contacts(vendor_id);
+  `)
+
+  db.exec(`ALTER TABLE contracts ADD COLUMN vendor_id INTEGER REFERENCES vendors(id);`)
+
+  // Promote every distinct free-text vendor_name to a real vendor record and
+  // link the contracts to it. vendor_name stays on the contract as a
+  // denormalised label so existing queries, exports, and Gmail matching keep
+  // working untouched.
+  backfillVendors()
+
+  // ─── Managed document storage + full-text search ──────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS documents (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contract_id INTEGER REFERENCES contracts(id) ON DELETE CASCADE,
+      vendor_id INTEGER REFERENCES vendors(id) ON DELETE SET NULL,
+      title TEXT NOT NULL,
+      doc_type TEXT NOT NULL DEFAULT 'contract'
+        CHECK(doc_type IN ('contract','amendment','sow','invoice','quote','correspondence','other')),
+      original_path TEXT,
+      stored_path TEXT NOT NULL,
+      file_hash TEXT NOT NULL DEFAULT '',
+      file_size INTEGER NOT NULL DEFAULT 0,
+      mime_type TEXT NOT NULL DEFAULT '',
+      page_count INTEGER,
+      extracted_text TEXT NOT NULL DEFAULT '',
+      extraction_status TEXT NOT NULL DEFAULT 'pending'
+        CHECK(extraction_status IN ('pending','extracted','no_text_layer','failed')),
+      extraction_note TEXT NOT NULL DEFAULT '',
+      uploaded_by_user_id INTEGER,
+      uploaded_by_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_documents_contract ON documents(contract_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_vendor ON documents(vendor_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_hash ON documents(file_hash);
+  `)
+
+  // External-content FTS5 index over the extracted text. The triggers keep it
+  // in step with the documents table.
+  db.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
+      title, extracted_text, content='documents', content_rowid='id'
+    );
+
+    CREATE TRIGGER IF NOT EXISTS documents_fts_ai AFTER INSERT ON documents BEGIN
+      INSERT INTO documents_fts(rowid, title, extracted_text)
+        VALUES (new.id, new.title, new.extracted_text);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS documents_fts_ad AFTER DELETE ON documents BEGIN
+      INSERT INTO documents_fts(documents_fts, rowid, title, extracted_text)
+        VALUES ('delete', old.id, old.title, old.extracted_text);
+    END;
+
+    CREATE TRIGGER IF NOT EXISTS documents_fts_au AFTER UPDATE ON documents BEGIN
+      INSERT INTO documents_fts(documents_fts, rowid, title, extracted_text)
+        VALUES ('delete', old.id, old.title, old.extracted_text);
+      INSERT INTO documents_fts(rowid, title, extracted_text)
+        VALUES (new.id, new.title, new.extracted_text);
+    END;
+  `)
+
+  // ─── Obligations, milestones, and SLAs ────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS obligations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      contract_id INTEGER NOT NULL REFERENCES contracts(id) ON DELETE CASCADE,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      obligation_type TEXT NOT NULL DEFAULT 'deliverable'
+        CHECK(obligation_type IN ('deliverable','milestone','sla','payment','compliance','renewal_task','other')),
+      responsible_party TEXT NOT NULL DEFAULT 'vendor'
+        CHECK(responsible_party IN ('us','vendor','both')),
+      owner_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      owner_name TEXT NOT NULL DEFAULT '',
+      due_date TEXT,
+      recurrence TEXT NOT NULL DEFAULT 'none'
+        CHECK(recurrence IN ('none','monthly','quarterly','semiannual','annual')),
+      status TEXT NOT NULL DEFAULT 'open'
+        CHECK(status IN ('open','in_progress','completed','waived')),
+      completed_at TEXT,
+      completed_by_name TEXT NOT NULL DEFAULT '',
+      reminder_days INTEGER NOT NULL DEFAULT 7,
+      critical INTEGER NOT NULL DEFAULT 0,
+      source TEXT NOT NULL DEFAULT 'manual' CHECK(source IN ('manual','ai_extracted')),
+      source_document_id INTEGER REFERENCES documents(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_obligations_contract ON obligations(contract_id);
+    CREATE INDEX IF NOT EXISTS idx_obligations_due ON obligations(status, due_date);
+  `)
+
+  // ─── AI extraction history ────────────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS extraction_runs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      document_id INTEGER REFERENCES documents(id) ON DELETE CASCADE,
+      contract_id INTEGER REFERENCES contracts(id) ON DELETE SET NULL,
+      status TEXT NOT NULL DEFAULT 'running'
+        CHECK(status IN ('running','completed','failed','refused')),
+      model TEXT NOT NULL DEFAULT '',
+      effort TEXT NOT NULL DEFAULT '',
+      input_tokens INTEGER NOT NULL DEFAULT 0,
+      output_tokens INTEGER NOT NULL DEFAULT 0,
+      result_json TEXT NOT NULL DEFAULT '',
+      error TEXT NOT NULL DEFAULT '',
+      created_by_name TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      completed_at TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_extraction_document ON extraction_runs(document_id);
+  `)
+
+  // ─── Outbound webhooks ────────────────────────────────────────────────────
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS webhooks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      url TEXT NOT NULL,
+      secret TEXT NOT NULL DEFAULT '',
+      events TEXT NOT NULL DEFAULT '[]',
+      active INTEGER NOT NULL DEFAULT 1,
+      last_status INTEGER,
+      last_error TEXT NOT NULL DEFAULT '',
+      last_fired_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      webhook_id INTEGER NOT NULL REFERENCES webhooks(id) ON DELETE CASCADE,
+      event TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '',
+      status_code INTEGER,
+      error TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_webhook_deliveries
+      ON webhook_deliveries(webhook_id, created_at DESC);
+  `)
+
+  db.pragma('user_version = 9')
+}
+
+/** Normalises a vendor name for duplicate detection ("Acme, Inc." → "acme"). */
+export function normalizeVendorName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[.,]/g, ' ')
+    .replace(/\b(inc|llc|ltd|corp|corporation|company|co|plc|gmbh|limited)\b/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+/**
+ * Creates a vendor record per distinct contract vendor_name and links contracts
+ * to it. Names that normalise to the same value collapse into one record, so
+ * "Acme Inc." and "Acme, Inc" stop being two different vendors.
+ */
+function backfillVendors(): void {
+  const rows = db
+    .prepare(`SELECT DISTINCT vendor_name FROM contracts WHERE TRIM(vendor_name) != ''`)
+    .all() as { vendor_name: string }[]
+  if (rows.length === 0) return
+
+  const insertVendor = db.prepare(
+    `INSERT INTO vendors (name, normalized_name) VALUES (?, ?)
+     ON CONFLICT(name) DO NOTHING`
+  )
+  const findByNormalized = db.prepare(
+    'SELECT id FROM vendors WHERE normalized_name = ? ORDER BY id LIMIT 1'
+  )
+  const linkContracts = db.prepare('UPDATE contracts SET vendor_id = ? WHERE vendor_name = ?')
+
+  const run = db.transaction(() => {
+    for (const row of rows) {
+      const name = row.vendor_name.trim()
+      const normalized = normalizeVendorName(name) || name.toLowerCase()
+
+      // Reuse an existing vendor when the normalised names collide.
+      let existing = findByNormalized.get(normalized) as { id: number } | undefined
+      if (!existing) {
+        insertVendor.run(name, normalized)
+        existing = findByNormalized.get(normalized) as { id: number } | undefined
+      }
+      if (existing) linkContracts.run(existing.id, row.vendor_name)
+    }
+  })
+
+  run()
 }
 
 /**

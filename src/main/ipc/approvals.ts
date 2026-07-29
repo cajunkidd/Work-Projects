@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { getDb, updateContractStatuses } from '../database'
 import { recordAudit } from '../audit'
 import { notifyApprovalRequested, notifyApprovalDecided } from '../emailNotifier'
+import { dispatchWebhook } from '../webhooks'
 import type {
   Actor,
   ApprovalRequest,
@@ -352,6 +353,14 @@ export function registerApprovalHandlers(): void {
           actor: payload.actor
         })
 
+        dispatchWebhook(db, 'contract.submitted', {
+          contract_id: contract.id,
+          vendor_name: contract.vendor_name,
+          annual_cost: contract.annual_cost,
+          submitted_by: payload.actor?.name ?? 'Unknown',
+          steps: rules.map((r) => r.name)
+        })
+
         // Notify the first step's approvers.
         const firstStep = rules[0]
         notifyApprovalRequested(db, {
@@ -514,6 +523,20 @@ export function registerApprovalHandlers(): void {
               }`,
           actor: { id: actor.id, name: actor.name, role: actor.role }
         })
+
+        if (outcome.request_status !== 'pending') {
+          dispatchWebhook(
+            db,
+            outcome.request_status === 'approved' ? 'contract.approved' : 'contract.rejected',
+            {
+              contract_id: contract.id,
+              vendor_name: contract.vendor_name,
+              annual_cost: contract.annual_cost,
+              decided_by: actor.name,
+              comment: payload.comment ?? ''
+            }
+          )
+        }
 
         if (outcome.advanced_to) {
           const nextStep = allSteps.find((s) => s.step_order === outcome.advanced_to)

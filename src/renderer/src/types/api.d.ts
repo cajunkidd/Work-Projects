@@ -31,6 +31,20 @@ import type {
   DiffLine,
   DiffStats,
   FieldChange,
+  Vendor,
+  VendorContact,
+  ContractDocument,
+  DocumentSearchHit,
+  DocumentType,
+  Obligation,
+  ObligationFilter,
+  AiSettings,
+  ExtractionResult,
+  ExtractionRun,
+  CalendarFeedOptions,
+  Webhook,
+  WebhookDelivery,
+  WebhookEvent,
   IpcResponse
 } from '../../../shared/types'
 
@@ -196,6 +210,59 @@ declare global {
         delete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<void>>
         categories: () => Promise<IpcResponse<string[]>>
         recordUsage: (id: number) => Promise<IpcResponse<void>>
+      }
+      vendors: {
+        list: (opts?: { search?: string; status?: string; include_inactive?: boolean }) => Promise<IpcResponse<Vendor[]>>
+        get: (id: number) => Promise<IpcResponse<Vendor>>
+        create: (payload: any) => Promise<IpcResponse<Vendor>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        delete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<void>>
+        merge: (payload: { keep_id: number; merge_id: number; actor?: any }) => Promise<IpcResponse<{ contracts_moved: number }>>
+        findDuplicates: () => Promise<IpcResponse<{ normalized_name: string; vendors: Vendor[] }[]>>
+        createContact: (payload: any) => Promise<IpcResponse<VendorContact>>
+        deleteContact: (id: number) => Promise<IpcResponse<void>>
+      }
+      documents: {
+        upload: (payload: { contract_id?: number | null; vendor_id?: number | null; doc_type?: DocumentType; actor?: any }) => Promise<IpcResponse<ContractDocument>>
+        list: (opts?: { contract_id?: number; vendor_id?: number }) => Promise<IpcResponse<ContractDocument[]>>
+        get: (id: number) => Promise<IpcResponse<ContractDocument>>
+        search: (opts: { query: string; contract_id?: number; doc_type?: DocumentType; limit?: number }) => Promise<IpcResponse<DocumentSearchHit[]>>
+        indexStats: () => Promise<IpcResponse<{ total: number; indexed: number; no_text_layer: number; failed: number }>>
+        open: (id: number) => Promise<IpcResponse<void>>
+        saveAs: (id: number) => Promise<IpcResponse<string>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        delete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<void>>
+        reindex: (id: number) => Promise<IpcResponse<{ status: string; characters: number }>>
+      }
+      obligations: {
+        list: (filter?: ObligationFilter) => Promise<IpcResponse<Obligation[]>>
+        create: (payload: any) => Promise<IpcResponse<Obligation>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        complete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<{ next_id: number | null; next_due: string | null }>>
+        delete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<void>>
+        stats: () => Promise<IpcResponse<{ open: number; overdue: number; due_soon: number; critical_open: number }>>
+      }
+      ai: {
+        settings: () => Promise<IpcResponse<AiSettings>>
+        test: () => Promise<IpcResponse<string>>
+        defaults: () => Promise<IpcResponse<{ model: string; effort: string }>>
+      }
+      extraction: {
+        run: (payload: { document_id: number; actor?: any }) => Promise<IpcResponse<{ run_id: number; result: ExtractionResult }>>
+        history: (opts?: { document_id?: number; contract_id?: number }) => Promise<IpcResponse<ExtractionRun[]>>
+        apply: (payload: any) => Promise<IpcResponse<{ fields_applied: number; obligations_created: number }>>
+      }
+      calendar: {
+        export: (options: CalendarFeedOptions & { path?: string }) => Promise<IpcResponse<{ path: string; events: number }>>
+        preview: (options: CalendarFeedOptions) => Promise<IpcResponse<{ events: number }>>
+      }
+      webhooks: {
+        list: () => Promise<IpcResponse<Webhook[]>>
+        create: (payload: { name: string; url: string; events: WebhookEvent[]; actor?: any }) => Promise<IpcResponse<Webhook>>
+        update: (payload: any) => Promise<IpcResponse<void>>
+        delete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<void>>
+        test: (id: number) => Promise<IpcResponse<string>>
+        deliveries: (webhook_id: number) => Promise<IpcResponse<WebhookDelivery[]>>
       }
     }
   }

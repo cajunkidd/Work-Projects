@@ -19,6 +19,11 @@ import { registerAuditHandlers } from './ipc/audit'
 import { registerApprovalHandlers } from './ipc/approvals'
 import { registerVersionHandlers } from './ipc/versions'
 import { registerClauseHandlers } from './ipc/clauses'
+import { registerVendorHandlers } from './ipc/vendors'
+import { registerDocumentHandlers } from './ipc/documents'
+import { registerObligationHandlers } from './ipc/obligations'
+import { registerExtractionHandlers } from './ipc/extraction'
+import { registerIntegrationHandlers } from './ipc/integrations'
 import { startScheduler, getUpcomingRenewals } from './scheduler'
 
 let mainWindow: BrowserWindow | null = null
@@ -86,6 +91,11 @@ app.whenReady().then(() => {
   registerApprovalHandlers()
   registerVersionHandlers()
   registerClauseHandlers()
+  registerVendorHandlers()
+  registerDocumentHandlers()
+  registerObligationHandlers()
+  registerExtractionHandlers()
+  registerIntegrationHandlers()
 
   // IPC for getting upcoming renewals (used by renderer)
   ipcMain.handle('scheduler:upcomingRenewals', () => {
