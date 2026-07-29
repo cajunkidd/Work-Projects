@@ -17,16 +17,17 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [polling, setPolling] = useState(false)
   const [pollMsg, setPollMsg] = useState('')
+  const [showRemoved, setShowRemoved] = useState(false)
 
   const load = () => {
-    const opts: any = {}
+    const opts: any = { show_deleted: showRemoved }
     if (selectedDeptId) opts.department_id = selectedDeptId
     window.api.invoices.list(opts).then((res) => {
       if (res.success && res.data) setInvoices(res.data)
     })
   }
 
-  useEffect(() => { load() }, [selectedDeptId])
+  useEffect(() => { load() }, [selectedDeptId, showRemoved])
 
   const handlePoll = async () => {
     setPolling(true)
@@ -42,16 +43,32 @@ export default function InvoicesPage() {
     setTimeout(() => setPollMsg(''), 4000)
   }
 
+  // Removing is a soft delete. While the removed list is showing, keep the row
+  // on screen and flip its state instead — otherwise it vanishes from the very
+  // view meant to let you undo it.
   const handleDelete = async (id: number) => {
     await window.api.invoices.delete(id)
-    setInvoices((prev) => prev.filter((i) => i.id !== id))
+    if (showRemoved) {
+      setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, is_deleted: 1 } : i)))
+    } else {
+      setInvoices((prev) => prev.filter((i) => i.id !== id))
+    }
   }
 
-  const discrepancies = invoices.filter((i) => i.amount > (i.budgeted_amount || 0) * 1.05)
+  const handleRestore = async (id: number) => {
+    const res = await window.api.invoices.restore(id)
+    if (res.success) {
+      setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, is_deleted: 0 } : i)))
+    }
+  }
+
+  const live = invoices.filter((i) => !i.is_deleted)
+  const removedCount = invoices.length - live.length
+  const discrepancies = live.filter((i) => i.amount > (i.budgeted_amount || 0) * 1.05)
 
   const [exportMsg, setExportMsg] = useState('')
   const handleExport = async () => {
-    const res = await window.api.exports.invoices(invoices)
+    const res = await window.api.exports.invoices(live)
     if (res.success) {
       setExportMsg('Exported!')
       setTimeout(() => setExportMsg(''), 3000)
@@ -66,11 +83,23 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-white text-2xl font-bold">Invoices</h1>
-          <p className="text-slate-400 text-sm">{invoices.length} invoices · {discrepancies.length} over budget</p>
+          <p className="text-slate-400 text-sm">
+            {live.length} invoices · {discrepancies.length} over budget
+            {showRemoved && removedCount > 0 && ` · ${removedCount} removed`}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           {exportMsg && <span className={`text-sm ${exportMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{exportMsg}</span>}
-          <Button variant="ghost" onClick={handleExport} disabled={invoices.length === 0}>Export</Button>
+          <label className="flex items-center gap-2 text-slate-400 text-sm cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showRemoved}
+              onChange={(e) => setShowRemoved(e.target.checked)}
+              className="accent-slate-400"
+            />
+            Show removed
+          </label>
+          <Button variant="ghost" onClick={handleExport} disabled={live.length === 0}>Export</Button>
           <RoleGuard minRole="admin">
             <div className="flex items-center gap-3">
               {pollMsg && <span className="text-sm text-slate-300">{pollMsg}</span>}
@@ -98,14 +127,21 @@ export default function InvoicesPage() {
           </Card>
         ) : (
           invoices.map((inv) => {
-            const overBudget = inv.budgeted_amount > 0 && inv.amount > inv.budgeted_amount * 1.05
+            const removed = !!inv.is_deleted
+            const overBudget = !removed && inv.budgeted_amount > 0 && inv.amount > inv.budgeted_amount * 1.05
             const diff = inv.amount - inv.budgeted_amount
             return (
-              <Card key={inv.id} className={overBudget ? 'border-amber-500/30' : ''}>
+              <Card
+                key={inv.id}
+                className={removed ? 'opacity-50' : overBudget ? 'border-amber-500/30' : ''}
+              >
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <p className="text-white font-medium truncate">{inv.subject}</p>
+                      <p className={`font-medium truncate ${removed ? 'text-slate-400 line-through' : 'text-white'}`}>
+                        {inv.subject}
+                      </p>
+                      {removed && <Badge variant="neutral">Removed</Badge>}
                       {overBudget && <Badge variant="warning">Over Budget</Badge>}
                     </div>
                     <p className="text-slate-400 text-sm">From: {inv.sender}</p>
@@ -126,12 +162,21 @@ export default function InvoicesPage() {
                     )}
                     <RoleGuard minRole="editor">
                       <div>
-                        <button
-                          onClick={() => handleDelete(inv.id)}
-                          className="text-slate-500 hover:text-red-400 text-xs transition-colors mt-1"
-                        >
-                          Remove
-                        </button>
+                        {removed ? (
+                          <button
+                            onClick={() => handleRestore(inv.id)}
+                            className="text-slate-500 hover:text-emerald-400 text-xs transition-colors mt-1"
+                          >
+                            Restore
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDelete(inv.id)}
+                            className="text-slate-500 hover:text-red-400 text-xs transition-colors mt-1"
+                          >
+                            Remove
+                          </button>
+                        )}
                       </div>
                     </RoleGuard>
                   </div>

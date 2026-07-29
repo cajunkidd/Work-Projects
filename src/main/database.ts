@@ -163,6 +163,7 @@ function runMigrations(): void {
   runV7Migration()
   runV8Migration()
   runV9Migration()
+  runV10Migration()
 
   // Auto-compute contract statuses
   updateContractStatuses()
@@ -171,6 +172,15 @@ function runMigrations(): void {
 function runV1Migration(): void {
   const version = (db.pragma('user_version', { simple: true }) as number) || 0
   if (version >= 1) return
+
+  // This migration rebuilds tables with the rename-copy-drop dance. Since
+  // SQLite 3.25 a plain `ALTER TABLE x RENAME TO x_old` also rewrites every
+  // *other* table's foreign key to point at the new name — so dropping x_old
+  // afterwards leaves those tables referencing a table that no longer exists,
+  // and any insert into them fails with "no such table: main.x_old".
+  // legacy_alter_table restores the old rename-only-this-table behaviour.
+  // runV10Migration repairs databases that already went through this.
+  db.pragma('legacy_alter_table = ON')
 
   // 1. Create branches table
   db.exec(`
@@ -274,6 +284,8 @@ function runV1Migration(): void {
     DROP TABLE budget_old;
   `)
 
+  db.pragma('legacy_alter_table = OFF')
+
   // Mark migration complete
   db.pragma('user_version = 1')
 }
@@ -306,7 +318,9 @@ function runV4Migration(): void {
   const version = (db.pragma('user_version', { simple: true }) as number) || 0
   if (version >= 4) return
 
-  // Recreate branch_assets with expanded asset_type CHECK to include printer and ingenico
+  // Recreate branch_assets with expanded asset_type CHECK to include printer and ingenico.
+  // Same rename hazard as v1 — see the note there.
+  db.pragma('legacy_alter_table = ON')
   db.exec(`
     ALTER TABLE branch_assets RENAME TO branch_assets_v3;
 
@@ -325,6 +339,7 @@ function runV4Migration(): void {
 
     DROP TABLE branch_assets_v3;
   `)
+  db.pragma('legacy_alter_table = OFF')
 
   db.pragma('user_version = 4')
 }
@@ -916,6 +931,91 @@ function runV9Migration(): void {
   `)
 
   db.pragma('user_version = 9')
+}
+
+/**
+ * Repairs foreign keys left pointing at a dropped `*_old` table.
+ *
+ * Earlier migrations rebuilt `users`, `contracts`, `budget`, and `branch_assets`
+ * by renaming the original aside, recreating it, copying rows, and dropping the
+ * rename. Since SQLite 3.25 that rename also rewrites every other table's
+ * foreign key to follow it, so once the `_old` table was dropped, tables like
+ * `invoices` and `contract_line_items` referenced a table that no longer
+ * existed. With foreign keys on, every insert into them failed with
+ * "no such table: main.contracts_old" — line items, renewal history,
+ * competitor offerings, invoices, projects, and notes were all unwritable on any
+ * upgraded database.
+ *
+ * The migrations no longer cause this (they set legacy_alter_table). This
+ * repairs databases that already went through the broken path, by recreating
+ * each affected table from its own stored schema with the reference corrected.
+ */
+function runV10Migration(): void {
+  const version = (db.pragma('user_version', { simple: true }) as number) || 0
+  if (version >= 10) return
+
+  const existing = new Set(
+    (db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
+      name: string
+    }[]).map((r) => r.name)
+  )
+
+  const tables = db
+    .prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' AND sql IS NOT NULL")
+    .all() as { name: string; sql: string }[]
+
+  // Collect the tables whose CREATE statement names a table that isn't there.
+  const broken: { name: string; sql: string }[] = []
+  for (const t of tables) {
+    let fixed = t.sql
+    for (const m of t.sql.matchAll(/REFERENCES\s+"([^"]+)"/g)) {
+      const target = m[1]
+      if (existing.has(target)) continue
+      // "contracts_old" → contracts, "branch_assets_v3" → branch_assets
+      const base = target.replace(/_(old|v\d+)$/, '')
+      if (base === target || !existing.has(base)) continue
+      fixed = fixed.split(`REFERENCES "${target}"`).join(`REFERENCES "${base}"`)
+    }
+    if (fixed !== t.sql) broken.push({ name: t.name, sql: fixed })
+  }
+
+  if (broken.length === 0) {
+    db.pragma('user_version = 10')
+    return
+  }
+
+  // Foreign keys must be off: the temporary rename below would otherwise be
+  // policed against the very constraints being repaired. legacy_alter_table
+  // keeps the rename from rewriting anything else on the way through.
+  db.pragma('foreign_keys = OFF')
+  db.pragma('legacy_alter_table = ON')
+
+  try {
+    db.transaction(() => {
+      for (const t of broken) {
+        // A rename carries indexes and triggers with it, and dropping the
+        // renamed copy would take them along — so re-create them afterwards.
+        const attached = db
+          .prepare(
+            `SELECT type, sql FROM sqlite_master
+             WHERE tbl_name = ? AND type IN ('index','trigger') AND sql IS NOT NULL`
+          )
+          .all(t.name) as { type: string; sql: string }[]
+
+        const tmp = `${t.name}__fk_repair`
+        db.exec(`ALTER TABLE "${t.name}" RENAME TO "${tmp}"`)
+        db.exec(t.sql)
+        db.exec(`INSERT INTO "${t.name}" SELECT * FROM "${tmp}"`)
+        db.exec(`DROP TABLE "${tmp}"`)
+        for (const a of attached) db.exec(a.sql)
+      }
+    })()
+  } finally {
+    db.pragma('legacy_alter_table = OFF')
+    db.pragma('foreign_keys = ON')
+  }
+
+  db.pragma('user_version = 10')
 }
 
 /** Normalises a vendor name for duplicate detection ("Acme, Inc." → "acme"). */

@@ -338,6 +338,16 @@ export function registerContractCreationHandlers(): void {
           }
         }
 
+        // A template reopened from the library points at whatever path it was
+        // uploaded from, which may since have moved or lived on another machine.
+        // Say so plainly instead of letting the upload fail on a missing file.
+        if (!fs.existsSync(payload.documentPath)) {
+          return {
+            success: false,
+            error: `The template file is no longer at ${payload.documentPath}. Upload it again.`
+          }
+        }
+
         const { documentId } = await documensoUploadAndSend(
           config,
           payload.documentPath,

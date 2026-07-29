@@ -271,10 +271,12 @@ export interface AppSettings {
 
 // ─── Contract Builder / E-Signature ─────────────────────────────────────────
 
+export type ContractTemplateType = 'built' | 'uploaded'
+
 export interface ContractTemplate {
   id: number
   title: string
-  type: 'built' | 'uploaded'
+  type: ContractTemplateType
   content?: string      // TipTap JSON (for 'built')
   file_path?: string    // absolute path to PDF (for 'uploaded')
   created_at: string

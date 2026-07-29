@@ -5,6 +5,7 @@ import Image from '@tiptap/extension-image'
 import Underline from '@tiptap/extension-underline'
 import type { Clause, ContractTemplate, SigningRequest, SigningRequestStatus } from '../../../../shared/types'
 import ClausePickerModal from './ClausePickerModal'
+import TemplateLibraryModal from './TemplateLibraryModal'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -196,6 +197,7 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
   const [msg, setMsg] = useState('')
   const [savedTemplateId, setSavedTemplateId] = useState<number | undefined>()
   const [showClausePicker, setShowClausePicker] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
 
   const editor = useEditor({
     extensions: [
@@ -252,6 +254,27 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
       reader.readAsDataURL(file)
     }
     input.click()
+  }
+
+  /**
+   * Reopens a saved draft. Loading a template also adopts its id, so a
+   * subsequent Save updates that template rather than forking a new one.
+   */
+  const openTemplate = (t: ContractTemplate) => {
+    if (!t.content) {
+      setMsg('That template has no editable content.')
+      return
+    }
+    try {
+      editor?.commands.setContent(JSON.parse(t.content))
+    } catch {
+      setMsg('That template could not be opened — its content is unreadable.')
+      return
+    }
+    setTitle(t.title)
+    setSavedTemplateId(t.id)
+    setMsg(`✓ Opened "${t.title}"`)
+    setTimeout(() => setMsg(''), 3000)
   }
 
   const handleSaveTemplate = async () => {
@@ -413,6 +436,13 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
         onInsert={insertClause}
       />
 
+      <TemplateLibraryModal
+        open={showTemplates}
+        onClose={() => setShowTemplates(false)}
+        only="built"
+        onPick={openTemplate}
+      />
+
       {/* Recipient */}
       <RecipientForm
         recipientName={recipientName}
@@ -425,11 +455,19 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
       <div className="flex items-center gap-3 flex-wrap">
         <button
           type="button"
+          onClick={() => setShowTemplates(true)}
+          className="px-4 py-2 text-sm rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700 transition-colors"
+        >
+          📚 Open Template
+        </button>
+
+        <button
+          type="button"
           onClick={handleSaveTemplate}
           disabled={saving}
           className="px-4 py-2 text-sm rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700 transition-colors disabled:opacity-50"
         >
-          {saving ? 'Saving...' : '💾 Save as Template'}
+          {saving ? 'Saving...' : savedTemplateId ? '💾 Update Template' : '💾 Save as Template'}
         </button>
 
         <button
@@ -465,6 +503,7 @@ function UploadPanel({ onSent }: { onSent: () => void }) {
   const [uploading, setUploading] = useState(false)
   const [sending, setSending] = useState(false)
   const [msg, setMsg] = useState('')
+  const [showTemplates, setShowTemplates] = useState(false)
 
   const handleUpload = async () => {
     setUploading(true)
@@ -515,6 +554,24 @@ function UploadPanel({ onSent }: { onSent: () => void }) {
 
   return (
     <div className="space-y-5">
+      {/* Reuse a previously uploaded file rather than picking it off disk again */}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowTemplates(true)}
+          className="px-4 py-2 text-sm rounded-lg border border-slate-600 text-slate-200 hover:bg-slate-700 transition-colors"
+        >
+          📚 Use a Saved Template
+        </button>
+      </div>
+
+      <TemplateLibraryModal
+        open={showTemplates}
+        onClose={() => setShowTemplates(false)}
+        only="uploaded"
+        onPick={(t) => { setTemplate(t); setTitle(t.title); setMsg('') }}
+      />
+
       {/* Drop zone */}
       <div
         onClick={handleUpload}

@@ -102,6 +102,7 @@ declare global {
       invoices: {
         list: (opts?: any) => Promise<IpcResponse<Invoice[]>>
         delete: (id: number) => Promise<IpcResponse<void>>
+        restore: (id: number) => Promise<IpcResponse<void>>
         insert: (payload: any) => Promise<IpcResponse<Invoice>>
       }
       competitors: {

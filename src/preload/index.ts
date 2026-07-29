@@ -61,6 +61,7 @@ contextBridge.exposeInMainWorld('api', {
   invoices: {
     list: (opts?: any) => ipcRenderer.invoke('invoices:list', opts),
     delete: (id: number) => ipcRenderer.invoke('invoices:delete', id),
+    restore: (id: number) => ipcRenderer.invoke('invoices:restore', id),
     insert: (payload: any) => ipcRenderer.invoke('invoices:insert', payload)
   },
 

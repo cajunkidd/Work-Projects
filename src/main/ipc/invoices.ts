@@ -8,16 +8,19 @@ export function registerInvoiceHandlers(): void {
     async (_e, opts?: { department_id?: number; show_deleted?: boolean }): Promise<IpcResponse<Invoice[]>> => {
       try {
         const db = getDb()
+        // `is_deleted` is a soft delete, so removed invoices are recoverable —
+        // the WHERE clause used to be hard-coded to 0, which made the
+        // `show_deleted` option a no-op and the rows unreachable forever.
         let query = `
           SELECT i.*, c.vendor_name, c.department_id
           FROM invoices i
           LEFT JOIN contracts c ON i.contract_id = c.id
-          WHERE i.is_deleted = 0
+          WHERE 1=1
         `
         const params: (string | number)[] = []
 
         if (!opts?.show_deleted) {
-          // already filtered above
+          query += ' AND i.is_deleted = 0'
         }
         if (opts?.department_id) {
           query += ' AND c.department_id = ?'
@@ -38,6 +41,19 @@ export function registerInvoiceHandlers(): void {
       getDb()
         .prepare(`UPDATE invoices SET is_deleted = 1, deleted_at = datetime('now') WHERE id = ?`)
         .run(id)
+      return { success: true }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  /** Undoes a soft delete. */
+  ipcMain.handle('invoices:restore', async (_e, id: number): Promise<IpcResponse<void>> => {
+    try {
+      const info = getDb()
+        .prepare('UPDATE invoices SET is_deleted = 0, deleted_at = NULL WHERE id = ? AND is_deleted = 1')
+        .run(id)
+      if (info.changes === 0) return { success: false, error: 'That invoice is not in the removed list.' }
       return { success: true }
     } catch (err: any) {
       return { success: false, error: err.message }

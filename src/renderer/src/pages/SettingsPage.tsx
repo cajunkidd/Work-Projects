@@ -24,11 +24,17 @@ export default function SettingsPage() {
   const [users, setUsers] = useState<User[]>([])
   const [newDeptName, setNewDeptName] = useState('')
   const [deptSaving, setDeptSaving] = useState(false)
+  // Inline rename: the row being edited, and its working value.
+  const [editingDeptId, setEditingDeptId] = useState<number | null>(null)
+  const [editingDeptName, setEditingDeptName] = useState('')
 
   // Branch management
   const [newBranchNumber, setNewBranchNumber] = useState('')
   const [newBranchName, setNewBranchName] = useState('')
   const [branchSaving, setBranchSaving] = useState(false)
+  const [editingBranchId, setEditingBranchId] = useState<number | null>(null)
+  const [editingBranch, setEditingBranch] = useState({ number: '', name: '' })
+  const [orgMsg, setOrgMsg] = useState('')
 
   // Email notifications (SMTP)
   const [smtpForm, setSmtpForm] = useState({
@@ -51,8 +57,12 @@ export default function SettingsPage() {
   const [showGmailCode, setShowGmailCode] = useState(false)
   const [gmailMsg, setGmailMsg] = useState('')
 
-  // User management
+  // User management. The same modal creates and edits — `editingUser` is null
+  // when adding, which is also what decides whether email and password are
+  // required (an edit leaves the password blank to keep the existing one).
   const [showUserModal, setShowUserModal] = useState(false)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [userMsg, setUserMsg] = useState('')
   const [userForm, setUserForm] = useState({
     name: '',
     email: '',
@@ -167,6 +177,25 @@ export default function SettingsPage() {
     setDepartments((prev) => prev.filter((d) => d.id !== id))
   }
 
+  const startRenameDept = (d: Department) => {
+    setEditingDeptId(d.id)
+    setEditingDeptName(d.name)
+    setOrgMsg('')
+  }
+
+  const handleRenameDept = async () => {
+    if (editingDeptId === null) return
+    const name = editingDeptName.trim()
+    if (!name) return
+    const res = await window.api.departments.update({ id: editingDeptId, name, actor: currentActor() } as any)
+    if (res.success) {
+      setDepartments((prev) => prev.map((d) => (d.id === editingDeptId ? { ...d, name } : d)))
+      setEditingDeptId(null)
+    } else {
+      setOrgMsg(res.error ?? 'Rename failed')
+    }
+  }
+
   // Add branch
   const handleAddBranch = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -182,6 +211,31 @@ export default function SettingsPage() {
   const handleDeleteBranch = async (id: number) => {
     await window.api.branches.delete({ id, actor: currentActor() } as any)
     setBranches((prev) => prev.filter((b) => b.id !== id))
+  }
+
+  const startRenameBranch = (b: Branch) => {
+    setEditingBranchId(b.id)
+    setEditingBranch({ number: String(b.number), name: b.name })
+    setOrgMsg('')
+  }
+
+  const handleRenameBranch = async () => {
+    if (editingBranchId === null) return
+    const name = editingBranch.name.trim()
+    const number = parseInt(editingBranch.number)
+    if (!name || Number.isNaN(number)) return
+    const res = await window.api.branches.update({
+      id: editingBranchId, number, name, actor: currentActor()
+    } as any)
+    if (res.success) {
+      setBranches((prev) =>
+        prev.map((b) => (b.id === editingBranchId ? { ...b, number, name } : b))
+          .sort((a, b) => a.number - b.number)
+      )
+      setEditingBranchId(null)
+    } else {
+      setOrgMsg(res.error ?? 'Rename failed')
+    }
   }
 
   // Gmail
@@ -238,19 +292,72 @@ export default function SettingsPage() {
     }
   }
 
-  // Create user
-  const handleCreateUser = async (e: React.FormEvent) => {
+  const blankUserForm = {
+    name: '', email: '', password: '', role: 'store_manager',
+    department_ids: [] as number[], branch_ids: [] as number[]
+  }
+
+  const openAddUser = () => {
+    setEditingUser(null)
+    setUserForm(blankUserForm)
+    setUserMsg('')
+    setShowUserModal(true)
+  }
+
+  const openEditUser = (u: User) => {
+    setEditingUser(u)
+    setUserForm({
+      name: u.name,
+      email: u.email,
+      password: '',
+      role: u.role,
+      department_ids: u.department_ids ?? [],
+      branch_ids: u.branch_ids ?? []
+    })
+    setUserMsg('')
+    setShowUserModal(true)
+  }
+
+  // One submit path for both modes. On edit the password is only sent when
+  // something was typed, so leaving it blank keeps the user's current one.
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault()
-    await window.api.users.create({ ...userForm, actor: currentActor() })
+    const actor = currentActor()
+
+    if (editingUser) {
+      const payload: any = {
+        id: editingUser.id,
+        name: userForm.name,
+        role: userForm.role,
+        department_ids: userForm.role === 'director' ? userForm.department_ids : [],
+        branch_ids: userForm.role === 'super_admin' ? [] : userForm.branch_ids,
+        actor
+      }
+      if (userForm.password) payload.password = userForm.password
+      const res = await window.api.users.update(payload)
+      if (!res.success) {
+        setUserMsg(res.error ?? 'Could not save this user')
+        return
+      }
+    } else {
+      const res = await window.api.users.create({ ...userForm, actor })
+      if (!res.success) {
+        setUserMsg(res.error ?? 'Could not create this user')
+        return
+      }
+    }
+
     setShowUserModal(false)
-    setUserForm({ name: '', email: '', password: '', role: 'store_manager', department_ids: [], branch_ids: [] })
+    setEditingUser(null)
+    setUserForm(blankUserForm)
     load()
   }
 
   const handleDeleteUser = async (id: number) => {
     if (id === currentUser?.id) return
-    await window.api.users.delete({ id, actor: currentActor() } as any)
-    setUsers((prev) => prev.filter((u) => u.id !== id))
+    const res = await window.api.users.delete({ id, actor: currentActor() } as any)
+    if (res.success) setUsers((prev) => prev.filter((u) => u.id !== id))
+    else setUserMsg(res.error ?? 'Could not remove this user')
   }
 
   const roleLabel = (role: string) => {
@@ -263,6 +370,24 @@ export default function SettingsPage() {
     if (role === 'super_admin') return 'info'
     if (role === 'director') return 'success'
     return 'neutral'
+  }
+
+  /** What a user can actually see, spelled out under their name. */
+  const scopeLabel = (u: User): string => {
+    if (u.role === 'super_admin') return 'All departments and branches'
+    const parts: string[] = []
+    const deptNames = (u.department_ids ?? [])
+      .map((id) => departments.find((d) => d.id === id)?.name)
+      .filter(Boolean)
+    const branchNames = (u.branch_ids ?? [])
+      .map((id) => {
+        const b = branches.find((x) => x.id === id)
+        return b ? `Branch ${b.number}` : undefined
+      })
+      .filter(Boolean)
+    if (deptNames.length) parts.push(deptNames.join(', '))
+    if (branchNames.length) parts.push(branchNames.join(', '))
+    return parts.length ? parts.join(' · ') : 'No access assigned yet'
   }
 
   return (
@@ -315,11 +440,34 @@ export default function SettingsPage() {
             />
             <Button type="submit" disabled={deptSaving}>Add</Button>
           </form>
+          {orgMsg && <p className="text-red-400 text-sm">{orgMsg}</p>}
           <div className="space-y-2">
             {departments.map((d) => (
-              <div key={d.id} className="flex items-center justify-between bg-slate-800 rounded-lg px-4 py-2">
-                <span className="text-white text-sm">{d.name}</span>
-                <button onClick={() => handleDeleteDept(d.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
+              <div key={d.id} className="flex items-center justify-between gap-2 bg-slate-800 rounded-lg px-4 py-2">
+                {editingDeptId === d.id ? (
+                  <>
+                    <Input
+                      value={editingDeptName}
+                      onChange={(e) => setEditingDeptName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); handleRenameDept() }
+                        if (e.key === 'Escape') setEditingDeptId(null)
+                      }}
+                      autoFocus
+                      className="flex-1"
+                    />
+                    <Button size="sm" onClick={handleRenameDept}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingDeptId(null)}>Cancel</Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-white text-sm">{d.name}</span>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => startRenameDept(d)} className="text-slate-500 hover:text-white text-xs transition-colors">Rename</button>
+                      <button onClick={() => handleDeleteDept(d.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
             {departments.length === 0 && <p className="text-slate-400 text-sm">No departments yet. Add one above.</p>}
@@ -349,9 +497,37 @@ export default function SettingsPage() {
           </form>
           <div className="space-y-2">
             {branches.map((b) => (
-              <div key={b.id} className="flex items-center justify-between bg-slate-800 rounded-lg px-4 py-2">
-                <span className="text-white text-sm">Branch {b.number} – {b.name}</span>
-                <button onClick={() => handleDeleteBranch(b.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
+              <div key={b.id} className="flex items-center justify-between gap-2 bg-slate-800 rounded-lg px-4 py-2">
+                {editingBranchId === b.id ? (
+                  <>
+                    <Input
+                      type="number"
+                      value={editingBranch.number}
+                      onChange={(e) => setEditingBranch((f) => ({ ...f, number: e.target.value }))}
+                      className="w-24"
+                    />
+                    <Input
+                      value={editingBranch.name}
+                      onChange={(e) => setEditingBranch((f) => ({ ...f, name: e.target.value }))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') { e.preventDefault(); handleRenameBranch() }
+                        if (e.key === 'Escape') setEditingBranchId(null)
+                      }}
+                      autoFocus
+                      className="flex-1"
+                    />
+                    <Button size="sm" onClick={handleRenameBranch}>Save</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingBranchId(null)}>Cancel</Button>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-white text-sm">Branch {b.number} – {b.name}</span>
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => startRenameBranch(b)} className="text-slate-500 hover:text-white text-xs transition-colors">Rename</button>
+                      <button onClick={() => handleDeleteBranch(b.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
+                    </div>
+                  </>
+                )}
               </div>
             ))}
             {branches.length === 0 && <p className="text-slate-400 text-sm">No branches yet. Add one above.</p>}
@@ -707,19 +883,22 @@ export default function SettingsPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-slate-800 pb-2">
             <h2 className="text-white font-semibold text-lg">User Management</h2>
-            <Button size="sm" onClick={() => setShowUserModal(true)}>+ Add User</Button>
+            <Button size="sm" onClick={openAddUser}>+ Add User</Button>
           </div>
+          {userMsg && !showUserModal && <p className="text-red-400 text-sm">{userMsg}</p>}
           <div className="space-y-2">
             {users.map((u) => (
               <div key={u.id} className="flex items-center justify-between bg-slate-800 rounded-lg px-4 py-3">
                 <div>
                   <p className="text-white text-sm font-medium">{u.name}</p>
                   <p className="text-slate-400 text-xs">{u.email}</p>
+                  <p className="text-slate-500 text-xs">{scopeLabel(u)}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant={roleBadgeVariant(u.role)}>
                     {roleLabel(u.role)}
                   </Badge>
+                  <button onClick={() => openEditUser(u)} className="text-slate-500 hover:text-white text-xs transition-colors">Edit</button>
                   {u.id !== currentUser?.id && (
                     <button onClick={() => handleDeleteUser(u.id)} className="text-slate-500 hover:text-red-400 text-lg transition-colors">×</button>
                   )}
@@ -730,11 +909,34 @@ export default function SettingsPage() {
         </section>
       </RoleGuard>
 
-      <Modal open={showUserModal} onClose={() => setShowUserModal(false)} title="Add User">
-        <form onSubmit={handleCreateUser} className="space-y-4">
+      <Modal
+        open={showUserModal}
+        onClose={() => setShowUserModal(false)}
+        title={editingUser ? `Edit ${editingUser.name}` : 'Add User'}
+      >
+        <form onSubmit={handleSaveUser} className="space-y-4">
           <Input label="Full Name" value={userForm.name} onChange={(e) => setUserForm((f) => ({ ...f, name: e.target.value }))} required />
-          <Input label="Email" type="email" value={userForm.email} onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))} required />
-          <Input label="Password" type="password" value={userForm.password} onChange={(e) => setUserForm((f) => ({ ...f, password: e.target.value }))} required />
+          <Input
+            label="Email"
+            type="email"
+            value={userForm.email}
+            onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))}
+            required={!editingUser}
+            disabled={!!editingUser}
+          />
+          {editingUser && (
+            <p className="-mt-2 text-slate-500 text-xs">
+              Email is the sign-in name and can't be changed here.
+            </p>
+          )}
+          <Input
+            label={editingUser ? 'New Password' : 'Password'}
+            type="password"
+            value={userForm.password}
+            onChange={(e) => setUserForm((f) => ({ ...f, password: e.target.value }))}
+            required={!editingUser}
+            placeholder={editingUser ? 'Leave blank to keep the current password' : ''}
+          />
           <Select
             label="Role"
             value={userForm.role}
@@ -807,7 +1009,11 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <Button type="submit" className="w-full justify-center">Create User</Button>
+          {userMsg && <p className="text-red-400 text-sm">{userMsg}</p>}
+
+          <Button type="submit" className="w-full justify-center">
+            {editingUser ? 'Save Changes' : 'Create User'}
+          </Button>
         </form>
       </Modal>
     </div>
