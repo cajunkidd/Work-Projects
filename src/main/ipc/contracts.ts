@@ -10,6 +10,7 @@ import {
 import { recordAudit, recordFieldChanges } from '../audit'
 import { dispatchWebhook } from '../webhooks'
 import { linkContractToVendor } from '../vendorLink'
+import { resolveActor, contractScopeClause, canAccessScope } from '../authz'
 import type {
   Actor,
   IpcResponse,
@@ -33,8 +34,33 @@ async function parseXlsx(filePath: string): Promise<Record<string, string>[]> {
   return XLSX.utils.sheet_to_json(ws) as Record<string, string>[]
 }
 
+/**
+ * Loads a contract and checks the actor may see it.
+ *
+ * Returns the row, or a string describing why not. Out-of-scope and missing are
+ * deliberately given the same message: telling a store manager "that contract
+ * exists but isn't yours" leaks the existence of contracts they can't see.
+ */
+function loadInScope(
+  db: ReturnType<typeof getDb>,
+  id: number,
+  actor: Actor | { id?: number } | null | undefined
+): { contract: Contract } | { error: string } {
+  const resolved = resolveActor(db, actor)
+  if (!resolved) {
+    return { error: 'Could not identify the acting user. Sign out and back in, then try again.' }
+  }
+  const row = db.prepare('SELECT * FROM contracts WHERE id = ?').get(id) as Contract | undefined
+  if (!row) return { error: 'Contract not found.' }
+  if (!canAccessScope(resolved, row.department_id ?? null, row.branch_id ?? null)) {
+    return { error: 'Contract not found.' }
+  }
+  return { contract: row }
+}
+
 export function registerContractHandlers(): void {
-  // List contracts (with optional department/branch filter and role-based access)
+  // List contracts. Visibility comes from the acting user's stored role — the
+  // caller may narrow with department_id/branch_id but cannot widen.
   ipcMain.handle(
     'contracts:list',
     async (
@@ -43,10 +69,7 @@ export function registerContractHandlers(): void {
         department_id?: number
         branch_id?: number
         search?: string
-        // role-based filtering
-        role?: string
-        allowed_department_ids?: number[]
-        allowed_branch_ids?: number[]
+        actor?: Actor
       }
     ): Promise<IpcResponse<Contract[]>> => {
       try {
@@ -81,34 +104,11 @@ export function registerContractHandlers(): void {
           params.push(opts.branch_id)
         }
 
-        // Role-based visibility
-        if (opts?.role === 'store_manager') {
-          const ids = opts.allowed_branch_ids ?? []
-          if (ids.length === 0) {
-            query += ' AND 1=0' // no access
-          } else {
-            query += ` AND c.branch_id IN (${ids.map(() => '?').join(',')})`
-            params.push(...ids)
-          }
-        } else if (opts?.role === 'director') {
-          const deptIds = opts.allowed_department_ids ?? []
-          const branchIds = opts.allowed_branch_ids ?? []
-          const clauses: string[] = []
-          if (deptIds.length > 0) {
-            clauses.push(`c.department_id IN (${deptIds.map(() => '?').join(',')})`)
-            params.push(...deptIds)
-          }
-          if (branchIds.length > 0) {
-            clauses.push(`c.branch_id IN (${branchIds.map(() => '?').join(',')})`)
-            params.push(...branchIds)
-          }
-          if (clauses.length > 0) {
-            query += ` AND (${clauses.join(' OR ')})`
-          } else {
-            query += ' AND 1=0'
-          }
-        }
-        // super_admin: no additional filter
+        // Role-based visibility, derived from the stored role rather than
+        // anything the renderer claims.
+        const scope = contractScopeClause(resolveActor(db, opts?.actor), 'c')
+        query += scope.sql
+        params.push(...scope.params)
 
         if (opts?.search) {
           query += ' AND (c.vendor_name LIKE ? OR c.poc_name LIKE ?)'
@@ -124,10 +124,17 @@ export function registerContractHandlers(): void {
     }
   )
 
-  // Get single contract
-  ipcMain.handle('contracts:get', async (_e, id: number): Promise<IpcResponse<Contract>> => {
+  // Get single contract. Accepts a bare id or { id, actor }.
+  ipcMain.handle('contracts:get', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<Contract>> => {
     try {
-      const row = getDb()
+      const db = getDb()
+      const id = typeof arg === 'number' ? arg : arg.id
+      const actor = typeof arg === 'number' ? undefined : arg.actor
+
+      const gate = loadInScope(db, id, actor)
+      if ('error' in gate) return { success: false, error: gate.error }
+
+      const row = db
         .prepare(
           `SELECT c.*, d.name as department_name, br.name as branch_name,
             CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal,
@@ -161,6 +168,21 @@ export function registerContractHandlers(): void {
     ): Promise<IpcResponse<Contract>> => {
       try {
         const db = getDb()
+
+        const resolved = resolveActor(db, payload.actor)
+        if (!resolved) {
+          return {
+            success: false,
+            error: 'Could not identify the acting user. Sign out and back in, then try again.'
+          }
+        }
+        if (!canAccessScope(resolved, payload.department_id ?? null, payload.branch_id ?? null)) {
+          return {
+            success: false,
+            error: 'You cannot create a contract outside your assigned departments and branches.'
+          }
+        }
+
         const result = db
           .prepare(
             `INSERT INTO contracts
@@ -219,10 +241,20 @@ export function registerContractHandlers(): void {
     ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
-        // Fetch current contract for notification and audit context before updating
-        const current = db
-          .prepare('SELECT * FROM contracts WHERE id = ?')
-          .get(payload.id) as Contract | undefined
+        // Fetch current contract for notification and audit context before
+        // updating — and refuse outright if it is outside the actor's scope.
+        const gate = loadInScope(db, payload.id, payload.actor)
+        if ('error' in gate) return { success: false, error: gate.error }
+        const current = gate.contract
+
+        // A move must land somewhere the actor can also reach, or a store
+        // manager could push a contract into a branch and lose sight of it.
+        const resolved = resolveActor(db, payload.actor)!
+        const nextDept = payload.department_id !== undefined ? payload.department_id : current.department_id
+        const nextBranch = payload.branch_id !== undefined ? payload.branch_id : current.branch_id
+        if (!canAccessScope(resolved, nextDept ?? null, nextBranch ?? null)) {
+          return { success: false, error: 'You cannot move a contract outside your assigned scope.' }
+        }
 
         // `actor` and the joined display-only columns are not contract columns.
         const NON_COLUMNS = [
@@ -281,9 +313,11 @@ export function registerContractHandlers(): void {
       const db = getDb()
       const id = typeof arg === 'number' ? arg : arg.id
       const actor = typeof arg === 'number' ? undefined : arg.actor
-      const contract = db
-        .prepare('SELECT vendor_name, department_id, branch_id, annual_cost FROM contracts WHERE id = ?')
-        .get(id) as { vendor_name: string; department_id: number | null; branch_id: number | null; annual_cost: number } | undefined
+
+      const gate = loadInScope(db, id, actor)
+      if ('error' in gate) return { success: false, error: gate.error }
+      const contract = gate.contract
+
       db.prepare('DELETE FROM contracts WHERE id = ?').run(id)
       if (contract) {
         recordAudit(db, {

@@ -644,6 +644,7 @@ export interface ObligationFilter {
   overdue_only?: boolean
   due_within_days?: number
   search?: string
+  actor?: Actor
 }
 
 // ─── AI Extraction ───────────────────────────────────────────────────────────

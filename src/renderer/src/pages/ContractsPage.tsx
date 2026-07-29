@@ -121,15 +121,11 @@ export default function ContractsPage() {
 
   const load = () => {
     if (!user) return
-    const opts: any = { search: search || undefined }
-
-    if (user.role === 'super_admin') {
-      if (selectedDeptId) opts.department_id = selectedDeptId
-    } else {
-      opts.role = user.role
-      opts.allowed_department_ids = user.department_ids
-      opts.allowed_branch_ids = user.branch_ids
+    const opts: any = {
+      search: search || undefined,
+      actor: { id: user.id, name: user.name, role: user.role }
     }
+    if (user.role === 'super_admin' && selectedDeptId) opts.department_id = selectedDeptId
 
     window.api.contracts.list(opts).then((res) => {
       if (res.success && res.data) setContracts(res.data)

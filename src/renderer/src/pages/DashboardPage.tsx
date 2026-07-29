@@ -259,42 +259,32 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!user) return
 
-    // Budget summaries — pass role filter for scoped access
-    const budgetFilter = user.role !== 'super_admin'
-      ? { role: user.role, department_ids: user.department_ids, branch_ids: user.branch_ids }
-      : undefined
-    window.api.budget.summaries(year, budgetFilter).then((res) => {
+    // Scope is applied in the main process from the signed-in user's stored
+    // role; the actor is only an identity claim.
+    const actor = { id: user.id, name: user.name, role: user.role }
+
+    window.api.budget.summaries(year, { actor }).then((res) => {
       if (res.success && res.data) setSummaries(res.data)
     })
 
-    // Contracts — role-based filter
-    const contractOpts: any = {}
-    if (user.role === 'super_admin') {
-      if (selectedDeptId) contractOpts.department_id = selectedDeptId
-    } else {
-      contractOpts.role = user.role
-      contractOpts.allowed_department_ids = user.department_ids
-      contractOpts.allowed_branch_ids = user.branch_ids
+    const contractOpts: any = { actor }
+    if (user.role === 'super_admin' && selectedDeptId) {
+      contractOpts.department_id = selectedDeptId
     }
 
     window.api.contracts.list(contractOpts).then((res) => {
       if (res.success && res.data) setContracts(res.data)
     })
 
-    window.api.dashboard.upcomingRenewals().then((res) => {
+    // Role filtering happens in the main process now; the only thing left to
+    // narrow here is the super admin's department picker.
+    window.api.dashboard.upcomingRenewals({ actor }).then((res) => {
       if (res.success && res.data) {
-        let filtered = res.data as Contract[]
-        if (user.role === 'store_manager') {
-          filtered = filtered.filter((c) => c.branch_id !== null && user.branch_ids.includes(c.branch_id))
-        } else if (user.role === 'director') {
-          filtered = filtered.filter((c) =>
-            (c.branch_id !== null && user.branch_ids.includes(c.branch_id)) ||
-            (c.department_id !== null && user.department_ids.includes(c.department_id))
-          )
-        } else if (selectedDeptId) {
-          filtered = filtered.filter((c) => c.department_id === selectedDeptId)
+        let rows = res.data as Contract[]
+        if (user.role === 'super_admin' && selectedDeptId) {
+          rows = rows.filter((c) => c.department_id === selectedDeptId)
         }
-        setUpcomingRenewals(filtered.slice(0, 8))
+        setUpcomingRenewals(rows.slice(0, 8))
       }
     })
 
@@ -302,7 +292,7 @@ export default function DashboardPage() {
       if (res.success && res.data) setRecentInvoices(res.data.slice(0, 5))
     })
 
-    window.api.dashboard.spendTrend({ fiscal_year: year, department_id: selectedDeptId ?? undefined }).then((res) => {
+    window.api.dashboard.spendTrend({ fiscal_year: year, department_id: selectedDeptId ?? undefined, actor }).then((res) => {
       if (res.success && res.data) setSpendTrend(res.data)
     })
 

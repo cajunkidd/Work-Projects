@@ -24,7 +24,7 @@ A Windows desktop application for directors and teams to manage company and depa
 - **Gmail integration** — auto-import vendor billing emails and audit against budget
 - **Vendor notes** and **project tracker** per contract
 - **Company branding** — upload logo to auto-apply brand colors throughout the app
-- **Role-based access** — Admin, Editor, Viewer roles with optional department scoping
+- **Role-based access** — Super Admin, Director, and Store Manager roles; scope is enforced in the main process from the stored role, so contracts, obligations, documents, and budgets outside a user's departments and branches never reach their window
 - **Shared network database** — team of 6+ shares a single SQLite file on a network drive
 
 ---

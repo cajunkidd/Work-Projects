@@ -38,10 +38,11 @@ contextBridge.exposeInMainWorld('api', {
   // Contracts
   contracts: {
     list: (opts?: any) => ipcRenderer.invoke('contracts:list', opts),
-    get: (id: number) => ipcRenderer.invoke('contracts:get', id),
+    get: (arg: number | { id: number; actor?: any }) => ipcRenderer.invoke('contracts:get', arg),
     create: (payload: any) => ipcRenderer.invoke('contracts:create', payload),
     update: (payload: any) => ipcRenderer.invoke('contracts:update', payload),
-    delete: (id: number) => ipcRenderer.invoke('contracts:delete', id),
+    delete: (arg: number | { id: number; actor?: any }) =>
+      ipcRenderer.invoke('contracts:delete', arg),
     uploadFile: () => ipcRenderer.invoke('contracts:uploadFile'),
     parseImport: () => ipcRenderer.invoke('contracts:parseImport'),
     bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows)
@@ -116,7 +117,7 @@ contextBridge.exposeInMainWorld('api', {
   // Dashboard
   dashboard: {
     spendTrend: (opts: any) => ipcRenderer.invoke('dashboard:spendTrend', opts),
-    upcomingRenewals: () => ipcRenderer.invoke('scheduler:upcomingRenewals')
+    upcomingRenewals: (opts?: any) => ipcRenderer.invoke('scheduler:upcomingRenewals', opts)
   },
 
   // IT Assets
@@ -235,7 +236,7 @@ contextBridge.exposeInMainWorld('api', {
     update: (payload: any) => ipcRenderer.invoke('obligations:update', payload),
     complete: (payload: any) => ipcRenderer.invoke('obligations:complete', payload),
     delete: (payload: any) => ipcRenderer.invoke('obligations:delete', payload),
-    stats: () => ipcRenderer.invoke('obligations:stats')
+    stats: (opts?: any) => ipcRenderer.invoke('obligations:stats', opts)
   },
 
   // AI extraction

@@ -75,7 +75,8 @@ export default function DocumentSearchPage() {
     }
     const res = await window.api.documents.search({
       query: query.trim(),
-      doc_type: docType || undefined
+      doc_type: docType || undefined,
+      actor
     })
     setSearched(true)
     if (res.success && res.data) {
@@ -85,7 +86,7 @@ export default function DocumentSearchPage() {
       setHits([])
       setError(res.error ?? 'Search failed')
     }
-  }, [query, docType])
+  }, [query, docType, actor?.id])
 
   useEffect(() => {
     const timer = setTimeout(runSearch, 250)

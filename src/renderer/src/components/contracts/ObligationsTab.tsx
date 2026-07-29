@@ -44,13 +44,13 @@ export default function ObligationsTab({ contractId }: Props) {
 
   const load = useCallback(async () => {
     const [listRes, userRes] = await Promise.all([
-      window.api.obligations.list({ contract_id: contractId }),
+      window.api.obligations.list({ contract_id: contractId, actor }),
       window.api.users.list()
     ])
     if (listRes.success && listRes.data) setObligations(listRes.data)
     if (userRes.success && userRes.data) setUsers(userRes.data)
     setLoading(false)
-  }, [contractId])
+  }, [contractId, actor?.id])
 
   useEffect(() => {
     load()

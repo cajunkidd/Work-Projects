@@ -104,8 +104,10 @@ app.whenReady().then(() => {
   registerIntegrationHandlers()
 
   // IPC for getting upcoming renewals (used by renderer)
-  ipcMain.handle('scheduler:upcomingRenewals', () => {
-    return { success: true, data: getUpcomingRenewals() }
+  ipcMain.handle('scheduler:upcomingRenewals', (_e, opts?: { actor?: { id: number } }) => {
+    // `actor ?? {}` rather than `actor` — an omitted actor must resolve to
+    // nobody and see nothing, not fall through to the scheduler's unscoped path.
+    return { success: true, data: getUpcomingRenewals(opts?.actor ?? {}) }
   })
 
   // Update contract statuses on startup

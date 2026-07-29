@@ -2,7 +2,7 @@ import { ipcMain, dialog } from 'electron'
 import path from 'path'
 import { getDb, switchDatabase } from '../database'
 import { sendTestEmail } from '../emailNotifier'
-import { requireRole, denied } from '../authz'
+import { requireRole, denied, resolveActor, contractScopeClause } from '../authz'
 import {
   encryptForStorage,
   isSecretKey,
@@ -234,13 +234,16 @@ export function registerSettingsHandlers(): void {
   // Dashboard spend trend data
   ipcMain.handle(
     'dashboard:spendTrend',
-    async (_e, opts: { fiscal_year: number; department_id?: number; branch_id?: number }): Promise<IpcResponse<{ month: string; amount: number }[]>> => {
+    async (_e, opts: { fiscal_year: number; department_id?: number; branch_id?: number; actor?: Actor }): Promise<IpcResponse<{ month: string; amount: number }[]>> => {
       try {
         const db = getDb()
         // Generate all 12 months of the fiscal year, then join contracts active
         // during each month: start_date <= last day of month AND end_date >= first day.
-        let filterClause = ''
-        const params: (string | number)[] = [opts.fiscal_year, opts.fiscal_year, opts.fiscal_year]
+        // Spend only counts contracts the actor can see, so the trend line
+        // matches the contract list beneath it.
+        const scope = contractScopeClause(resolveActor(db, opts.actor), 'c')
+        let filterClause = scope.sql
+        const params: (string | number)[] = [opts.fiscal_year, opts.fiscal_year, opts.fiscal_year, ...scope.params]
         if (opts.department_id) {
           filterClause += ' AND c.department_id = ?'
           params.push(opts.department_id)

@@ -101,6 +101,51 @@ export function denied(result: ResolvedActor | AuthzFailure): result is AuthzFai
 }
 
 /**
+ * SQL fragment restricting a query to the contracts an actor may see.
+ *
+ * Read paths previously filtered on a role and id list the *renderer* supplied,
+ * so a modified renderer could ask for everything. Callers now pass only an
+ * actor id; the scope is derived here from the stored role.
+ *
+ * `alias` is the contracts table alias in the calling query. The returned SQL
+ * always begins with " AND " so it can be appended to a `WHERE 1=1` query.
+ */
+export function contractScopeClause(
+  actor: ResolvedActor | null,
+  alias = 'c'
+): { sql: string; params: number[] } {
+  // No identifiable user sees nothing. Failing closed matters more here than
+  // being lenient to a caller that forgot to pass an actor.
+  if (!actor) return { sql: ' AND 1=0', params: [] }
+
+  if (actor.role === 'super_admin') return { sql: '', params: [] }
+
+  if (actor.role === 'director') {
+    const clauses: string[] = []
+    const params: number[] = []
+
+    if (actor.department_ids.length > 0) {
+      clauses.push(`${alias}.department_id IN (${actor.department_ids.map(() => '?').join(',')})`)
+      params.push(...actor.department_ids)
+    }
+    if (actor.branch_ids.length > 0) {
+      clauses.push(`${alias}.branch_id IN (${actor.branch_ids.map(() => '?').join(',')})`)
+      params.push(...actor.branch_ids)
+    }
+
+    if (clauses.length === 0) return { sql: ' AND 1=0', params: [] }
+    return { sql: ` AND (${clauses.join(' OR ')})`, params }
+  }
+
+  // store_manager: only their own branches.
+  if (actor.branch_ids.length === 0) return { sql: ' AND 1=0', params: [] }
+  return {
+    sql: ` AND ${alias}.branch_id IN (${actor.branch_ids.map(() => '?').join(',')})`,
+    params: [...actor.branch_ids]
+  }
+}
+
+/**
  * Whether an actor may act on a contract in a given scope. Super admins see
  * everything; directors are limited to their assigned departments and
  * branches; store managers to their branches.

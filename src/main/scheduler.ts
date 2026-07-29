@@ -9,7 +9,8 @@ import {
 } from './emailNotifier'
 import { dispatchWebhook } from './webhooks'
 import { buildCalendarFeed } from './calendarFeed'
-import type { Contract } from '../shared/types'
+import { resolveActor, contractScopeClause } from './authz'
+import type { Actor, Contract } from '../shared/types'
 
 /**
  * Daily reminder sweep.
@@ -272,8 +273,19 @@ function refreshCalendarFeed(): void {
   }
 }
 
-export function getUpcomingRenewals(): Contract[] {
-  return getDb()
+/**
+ * Renewals due in the next 120 days.
+ *
+ * `actor` scopes the result. It is optional because the scheduler itself calls
+ * this with no actor to decide who to notify — that path is internal and never
+ * reaches a renderer. Every IPC caller passes one.
+ */
+export function getUpcomingRenewals(actor?: Actor | { id?: number }): Contract[] {
+  const db = getDb()
+  const scope = actor === undefined
+    ? { sql: '', params: [] as number[] }
+    : contractScopeClause(resolveActor(db, actor), 'c')
+  return db
     .prepare(
       `SELECT c.*, d.name as department_name,
         CAST(julianday(c.end_date) - julianday('now') AS INTEGER) as days_until_renewal,
@@ -290,7 +302,8 @@ export function getUpcomingRenewals(): Contract[] {
        LEFT JOIN departments d ON c.department_id = d.id
        WHERE status IN ('active','expiring_soon')
          AND julianday(end_date) - julianday('now') <= 120
+         ${scope.sql}
        ORDER BY end_date ASC`
     )
-    .all() as Contract[]
+    .all(...scope.params) as Contract[]
 }

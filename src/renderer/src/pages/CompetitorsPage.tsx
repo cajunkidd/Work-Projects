@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useThemeStore } from '../store/themeStore'
+import { useActor } from '../lib/actor'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import type { Contract, CompetitorOffering } from '../../../shared/types'
@@ -10,12 +11,13 @@ function fmt(n: number) {
 
 export default function CompetitorsPage() {
   const { selectedDeptId } = useThemeStore()
+  const actor = useActor()
   const [contracts, setContracts] = useState<Contract[]>([])
   const [offerings, setOfferings] = useState<Record<number, CompetitorOffering[]>>({})
   const [expanded, setExpanded] = useState<number | null>(null)
 
   useEffect(() => {
-    const opts: any = { status: 'active' }
+    const opts: any = { status: 'active', actor }
     if (selectedDeptId) opts.department_id = selectedDeptId
     window.api.contracts.list(opts).then(async (res) => {
       if (res.success && res.data) {
@@ -28,7 +30,7 @@ export default function CompetitorsPage() {
         setOfferings(offeringsMap)
       }
     })
-  }, [selectedDeptId])
+  }, [selectedDeptId, actor?.id])
 
   return (
     <div className="space-y-6">

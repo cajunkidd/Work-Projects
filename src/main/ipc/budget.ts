@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import { requireRole, denied } from '../authz'
+import { requireRole, denied, resolveActor } from '../authz'
 import { notifyBudgetUpdated } from '../emailNotifier'
 import type {
   IpcResponse,
@@ -192,20 +192,28 @@ export function registerBudgetHandlers(): void {
     }
   )
 
-  // Budget summaries with spend
-  // Accepts optional filter: { role, department_ids, branch_ids } for scoped access
+  // Budget summaries with spend. Scope comes from the acting user's stored
+  // role — the renderer used to pass its own role and id lists, which meant a
+  // modified renderer could ask for the whole company's numbers.
   ipcMain.handle(
     'budget:summaries',
     async (
       _e,
       fiscal_year: number,
-      filter?: { role: string; department_ids: number[]; branch_ids: number[] }
+      filter?: { actor?: { id: number } }
     ): Promise<IpcResponse<BudgetSummary[]>> => {
       try {
         const db = getDb()
-        const role = filter?.role ?? 'super_admin'
-        const allowedDeptIds = filter?.department_ids ?? []
-        const allowedBranchIds = filter?.branch_ids ?? []
+        const actor = resolveActor(db, filter?.actor)
+        if (!actor) {
+          return {
+            success: false,
+            error: 'Could not identify the acting user. Sign out and back in, then try again.'
+          }
+        }
+        const role = actor.role
+        const allowedDeptIds = actor.department_ids
+        const allowedBranchIds = actor.branch_ids
 
         const summaries: BudgetSummary[] = []
 
@@ -261,7 +269,9 @@ export function registerBudgetHandlers(): void {
             .all(String(fiscal_year), String(fiscal_year), fiscal_year) as any[]
 
           for (const r of deptRows) {
-            if (role === 'director' && allowedDeptIds.length > 0 && !allowedDeptIds.includes(r.department_id)) continue
+            // A director with no assigned departments sees none, rather than
+            // falling through to every department.
+            if (role === 'director' && !allowedDeptIds.includes(r.department_id)) continue
             summaries.push({
               department_id: r.department_id,
               department_name: r.department_name,

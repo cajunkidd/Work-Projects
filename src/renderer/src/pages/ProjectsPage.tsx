@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useThemeStore } from '../store/themeStore'
 import { useAuthStore } from '../store/authStore'
+import { useActor } from '../lib/actor'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
@@ -14,6 +15,7 @@ type ProjectStatus = 'active' | 'on_hold' | 'completed'
 
 export default function ProjectsPage() {
   const { selectedDeptId } = useThemeStore()
+  const actor = useActor()
   const [projects, setProjects] = useState<VendorProject[]>([])
   const [contracts, setContracts] = useState<Contract[]>([])
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -29,14 +31,16 @@ export default function ProjectsPage() {
   }
 
   useEffect(() => {
-    window.api.contracts.list(selectedDeptId ? { department_id: selectedDeptId } : undefined).then((res) => {
+    const opts: any = { actor }
+    if (selectedDeptId) opts.department_id = selectedDeptId
+    window.api.contracts.list(opts).then((res) => {
       if (res.success && res.data) {
         setContracts(res.data)
         if (res.data.length > 0) setForm((f) => ({ ...f, contract_id: String(res.data![0].id) }))
       }
     })
     load()
-  }, [selectedDeptId])
+  }, [selectedDeptId, actor?.id])
 
   const filtered = projects.filter((p) => filterStatus === 'all' || p.status === filterStatus)
 

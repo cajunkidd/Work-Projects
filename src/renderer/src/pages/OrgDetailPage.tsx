@@ -46,23 +46,21 @@ export default function OrgDetailPage({ type }: OrgDetailPageProps) {
     if (!entityId || !user) return
     setLoading(true)
 
-    const budgetFilter = user.role !== 'super_admin'
-      ? { role: user.role, department_ids: user.department_ids, branch_ids: user.branch_ids }
-      : undefined
+    const actor = { id: user.id, name: user.name, role: user.role }
 
     const contractOpts: any = type === 'department'
-      ? { department_id: entityId }
-      : { branch_id: entityId }
+      ? { department_id: entityId, actor }
+      : { branch_id: entityId, actor }
 
-    const trendOpts: any = { fiscal_year: year }
+    const trendOpts: any = { fiscal_year: year, actor }
     if (type === 'department') trendOpts.department_id = entityId
     else trendOpts.branch_id = entityId
 
     Promise.all([
-      window.api.budget.summaries(year, budgetFilter),
+      window.api.budget.summaries(year, { actor }),
       window.api.contracts.list(contractOpts),
       window.api.dashboard.spendTrend(trendOpts),
-      window.api.dashboard.upcomingRenewals()
+      window.api.dashboard.upcomingRenewals({ actor })
     ]).then(([summaryRes, contractsRes, trendRes, renewalsRes]) => {
       if (summaryRes.success && summaryRes.data) {
         const match = summaryRes.data.find((s: BudgetSummary) =>

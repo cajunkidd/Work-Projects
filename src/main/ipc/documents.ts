@@ -4,6 +4,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { getDb, getDbDirectory } from '../database'
 import { recordAudit } from '../audit'
+import { resolveActor, contractScopeClause } from '../authz'
 import type {
   Actor,
   ContractDocument,
@@ -265,7 +266,13 @@ export function registerDocumentHandlers(): void {
     'documents:search',
     async (
       _e,
-      opts: { query: string; contract_id?: number; doc_type?: DocumentType; limit?: number }
+      opts: {
+        query: string
+        contract_id?: number
+        doc_type?: DocumentType
+        limit?: number
+        actor?: Actor
+      }
     ): Promise<IpcResponse<DocumentSearchHit[]>> => {
       try {
         const match = toFtsQuery(opts.query ?? '')
@@ -280,9 +287,18 @@ export function registerDocumentHandlers(): void {
           FROM documents_fts
           JOIN documents d ON d.id = documents_fts.rowid
           LEFT JOIN vendors v ON d.vendor_id = v.id
+          LEFT JOIN contracts c ON d.contract_id = c.id
           WHERE documents_fts MATCH ?
         `
         const params: (string | number)[] = [match]
+
+        // Search follows contract scope: you can find text inside a document
+        // only if you could open the contract it belongs to. Documents with no
+        // contract (vendor-level files) are super-admin only, since there is no
+        // department or branch to judge them by.
+        const scope = contractScopeClause(resolveActor(getDb(), opts.actor), 'c')
+        query += scope.sql
+        params.push(...scope.params)
 
         if (opts.contract_id) {
           query += ' AND d.contract_id = ?'

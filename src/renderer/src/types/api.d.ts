@@ -74,7 +74,7 @@ declare global {
       budget: {
         list: () => Promise<IpcResponse<Budget[]>>
         upsert: (payload: any) => Promise<IpcResponse<void>>
-        summaries: (fiscal_year: number, filter?: { role: string; department_ids: number[]; branch_ids: number[] }) => Promise<IpcResponse<BudgetSummary[]>>
+        summaries: (fiscal_year: number, filter?: { actor?: any }) => Promise<IpcResponse<BudgetSummary[]>>
         monthlyList: (opts: { fiscal_year: number; department_id?: number | null; branch_id?: number | null }) => Promise<IpcResponse<MonthlyBudget[]>>
         monthlyUpsert: (payload: MonthlyBudget) => Promise<IpcResponse<void>>
         monthlyBulkUpsert: (entries: MonthlyBudget[], actor?: any) => Promise<IpcResponse<void>>
@@ -82,7 +82,7 @@ declare global {
       }
       contracts: {
         list: (opts?: any) => Promise<IpcResponse<Contract[]>>
-        get: (id: number) => Promise<IpcResponse<Contract>>
+        get: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<Contract>>
         create: (payload: any) => Promise<IpcResponse<Contract>>
         update: (payload: any) => Promise<IpcResponse<void>>
         delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
@@ -150,7 +150,7 @@ declare global {
       }
       dashboard: {
         spendTrend: (opts: any) => Promise<IpcResponse<{ month: string; amount: number }[]>>
-        upcomingRenewals: () => Promise<IpcResponse<any[]>>
+        upcomingRenewals: (opts?: { actor?: any }) => Promise<IpcResponse<any[]>>
       }
       assets: {
         list: () => Promise<IpcResponse<BranchAsset[]>>
@@ -238,7 +238,7 @@ declare global {
         upload: (payload: { contract_id?: number | null; vendor_id?: number | null; doc_type?: DocumentType; actor?: any }) => Promise<IpcResponse<ContractDocument>>
         list: (opts?: { contract_id?: number; vendor_id?: number }) => Promise<IpcResponse<ContractDocument[]>>
         get: (id: number) => Promise<IpcResponse<ContractDocument>>
-        search: (opts: { query: string; contract_id?: number; doc_type?: DocumentType; limit?: number }) => Promise<IpcResponse<DocumentSearchHit[]>>
+        search: (opts: { query: string; contract_id?: number; doc_type?: DocumentType; limit?: number; actor?: any }) => Promise<IpcResponse<DocumentSearchHit[]>>
         indexStats: () => Promise<IpcResponse<{ total: number; indexed: number; no_text_layer: number; failed: number }>>
         open: (id: number) => Promise<IpcResponse<void>>
         saveAs: (id: number) => Promise<IpcResponse<string>>
@@ -252,7 +252,7 @@ declare global {
         update: (payload: any) => Promise<IpcResponse<void>>
         complete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<{ next_id: number | null; next_due: string | null }>>
         delete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<void>>
-        stats: () => Promise<IpcResponse<{ open: number; overdue: number; due_soon: number; critical_open: number }>>
+        stats: (opts?: { actor?: any }) => Promise<IpcResponse<{ open: number; overdue: number; due_soon: number; critical_open: number }>>
       }
       ai: {
         settings: () => Promise<IpcResponse<AiSettings>>

@@ -51,14 +51,15 @@ export default function ObligationsPage() {
         search: search.trim() || undefined,
         status: status || undefined,
         obligation_type: type || undefined,
-        overdue_only: overdueOnly || undefined
+        overdue_only: overdueOnly || undefined,
+        actor
       }),
-      window.api.obligations.stats()
+      window.api.obligations.stats({ actor })
     ])
     if (listRes.success && listRes.data) setObligations(listRes.data)
     if (statsRes.success && statsRes.data) setStats(statsRes.data)
     setLoading(false)
-  }, [search, status, type, overdueOnly])
+  }, [search, status, type, overdueOnly, actor?.id])
 
   useEffect(() => {
     const timer = setTimeout(load, 200)

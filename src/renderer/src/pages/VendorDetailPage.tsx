@@ -43,7 +43,7 @@ export default function VendorDetailPage() {
   const load = useCallback(async () => {
     const [vendorRes, contractRes, docRes] = await Promise.all([
       window.api.vendors.get(vendorId),
-      window.api.contracts.list(),
+      window.api.contracts.list({ actor }),
       window.api.documents.list({ vendor_id: vendorId })
     ])
     if (vendorRes.success && vendorRes.data) {
@@ -54,7 +54,7 @@ export default function VendorDetailPage() {
       setContracts(contractRes.data.filter((c) => (c as any).vendor_id === vendorId))
     }
     if (docRes.success && docRes.data) setDocuments(docRes.data)
-  }, [vendorId])
+  }, [vendorId, actor?.id])
 
   useEffect(() => {
     load()

@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { recordAudit, recordFieldChanges } from '../audit'
 import { dispatchWebhook } from '../webhooks'
+import { resolveActor, contractScopeClause } from '../authz'
 import type {
   Actor,
   IpcResponse,
@@ -71,6 +72,11 @@ export function registerObligationHandlers(): void {
           WHERE 1=1
         `
         const params: (string | number)[] = []
+
+        // Obligations inherit their contract's visibility.
+        const scope = contractScopeClause(resolveActor(getDb(), filter?.actor), 'c')
+        query += scope.sql
+        params.push(...scope.params)
 
         if (filter?.contract_id) {
           query += ' AND o.contract_id = ?'
@@ -341,24 +347,33 @@ export function registerObligationHandlers(): void {
   /** Headline counts for the obligations dashboard strip. */
   ipcMain.handle(
     'obligations:stats',
-    async (): Promise<
+    async (
+      _e,
+      opts?: { actor?: Actor }
+    ): Promise<
       IpcResponse<{ open: number; overdue: number; due_soon: number; critical_open: number }>
     > => {
       try {
-        const row = getDb()
+        const db = getDb()
+        // Counts are scoped the same way the list is, so the dashboard strip
+        // can't report obligations the user cannot open.
+        const scope = contractScopeClause(resolveActor(db, opts?.actor), 'c')
+        const row = db
           .prepare(
             `SELECT
-               SUM(CASE WHEN status IN ('open','in_progress') THEN 1 ELSE 0 END) as open,
-               SUM(CASE WHEN status IN ('open','in_progress') AND due_date IS NOT NULL
-                 AND due_date != '' AND date(due_date) < date('now') THEN 1 ELSE 0 END) as overdue,
-               SUM(CASE WHEN status IN ('open','in_progress') AND due_date IS NOT NULL
-                 AND due_date != '' AND date(due_date)
+               SUM(CASE WHEN o.status IN ('open','in_progress') THEN 1 ELSE 0 END) as open,
+               SUM(CASE WHEN o.status IN ('open','in_progress') AND o.due_date IS NOT NULL
+                 AND o.due_date != '' AND date(o.due_date) < date('now') THEN 1 ELSE 0 END) as overdue,
+               SUM(CASE WHEN o.status IN ('open','in_progress') AND o.due_date IS NOT NULL
+                 AND o.due_date != '' AND date(o.due_date)
                  BETWEEN date('now') AND date('now','+30 days') THEN 1 ELSE 0 END) as due_soon,
-               SUM(CASE WHEN status IN ('open','in_progress') AND critical = 1 THEN 1 ELSE 0 END)
+               SUM(CASE WHEN o.status IN ('open','in_progress') AND o.critical = 1 THEN 1 ELSE 0 END)
                  as critical_open
-             FROM obligations`
+             FROM obligations o
+             JOIN contracts c ON o.contract_id = c.id
+             WHERE 1=1${scope.sql}`
           )
-          .get() as any
+          .get(...scope.params) as any
         return {
           success: true,
           data: {

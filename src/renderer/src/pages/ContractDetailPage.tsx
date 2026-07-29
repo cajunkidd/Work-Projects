@@ -83,13 +83,13 @@ export default function ContractDetailPage() {
   // Re-read the contract after an approval decision or a version restore, both
   // of which change fields this page displays.
   const reloadContract = useCallback(() => {
-    window.api.contracts.get(contractId).then((res) => {
+    window.api.contracts.get({ id: contractId, actor }).then((res) => {
       if (res.success && res.data) setContract(res.data)
     })
-  }, [contractId])
+  }, [contractId, actor?.id])
 
   useEffect(() => {
-    window.api.contracts.get(contractId).then((res) => {
+    window.api.contracts.get({ id: contractId, actor }).then((res) => {
       if (res.success && res.data) setContract(res.data)
     })
     window.api.lineItems.list(contractId).then((res) => {
