@@ -1,6 +1,7 @@
 import { ipcMain, dialog } from 'electron'
 import { getDb } from '../database'
-import type { IpcResponse, BranchAsset } from '../../shared/types'
+import { requireRole, denied } from '../authz'
+import type { Actor, IpcResponse, BranchAsset } from '../../shared/types'
 
 const ASSET_TYPES = ['computer', 'thin_client', 'server', 'printer', 'ingenico'] as const
 
@@ -39,9 +40,16 @@ export function registerAssetHandlers(): void {
   // Save (bulk upsert) asset counts
   ipcMain.handle(
     'assets:save',
-    async (_e, rows: { branch_id: number; asset_type: string; count: number }[]): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      rows: { branch_id: number; asset_type: string; count: number }[],
+      actor?: Actor
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        // Asset counts drive IT cost allocation across every branch.
+        const gate = requireRole(db, actor, 'super_admin')
+        if (denied(gate)) return gate
         const stmt = db.prepare(`
           INSERT INTO branch_assets (branch_id, asset_type, count, updated_at)
           VALUES (?, ?, ?, datetime('now'))

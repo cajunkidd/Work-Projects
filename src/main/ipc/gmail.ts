@@ -1,13 +1,34 @@
 import { ipcMain, shell } from 'electron'
 import { google } from 'googleapis'
 import { getDb } from '../database'
+import { requireRole, denied } from '../authz'
 import { encryptForStorage, decryptFromStorage } from '../crypto/secrets'
-import type { IpcResponse } from '../../shared/types'
+import type { Actor, IpcResponse } from '../../shared/types'
 
 // NOTE: Replace with your actual Google OAuth credentials from Google Cloud Console
 const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || 'YOUR_GOOGLE_CLIENT_ID'
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || 'YOUR_GOOGLE_CLIENT_SECRET'
 const REDIRECT_URI = 'urn:ietf:wg:oauth:2.0:oob'
+
+/**
+ * Hosts `gmail:openUrl` is willing to hand to the OS.
+ *
+ * `shell.openExternal` launches whatever the platform associates with a scheme
+ * — file:// paths, and on Windows any registered custom protocol. The renderer
+ * only ever needs to open a Google consent screen, so the handler takes an
+ * allowlist rather than a URL.
+ */
+const OPENABLE_HOSTS = new Set(['accounts.google.com', 'console.cloud.google.com', 'myaccount.google.com'])
+
+function isOpenable(raw: string): boolean {
+  let url: URL
+  try {
+    url = new URL(raw)
+  } catch {
+    return false
+  }
+  return url.protocol === 'https:' && OPENABLE_HOSTS.has(url.hostname)
+}
 
 function getOAuthClient() {
   return new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI)
@@ -36,8 +57,10 @@ function saveToken(token: Record<string, string>): void {
 
 export function registerGmailHandlers(): void {
   // Get auth URL for user to visit
-  ipcMain.handle('gmail:getAuthUrl', async (): Promise<IpcResponse<string>> => {
+  ipcMain.handle('gmail:getAuthUrl', async (_e, opts?: { actor?: Actor }): Promise<IpcResponse<string>> => {
     try {
+      const gate = requireRole(getDb(), opts?.actor, 'super_admin')
+      if (denied(gate)) return gate
       const auth = getOAuthClient()
       const url = auth.generateAuthUrl({
         access_type: 'offline',
@@ -51,8 +74,11 @@ export function registerGmailHandlers(): void {
   })
 
   // Exchange code for token
-  ipcMain.handle('gmail:connect', async (_e, code: string): Promise<IpcResponse<string>> => {
+  ipcMain.handle('gmail:connect', async (_e, arg: string | { code: string; actor?: Actor }): Promise<IpcResponse<string>> => {
     try {
+      const code = typeof arg === 'string' ? arg : arg.code
+      const gate = requireRole(getDb(), typeof arg === 'string' ? undefined : arg.actor, 'super_admin')
+      if (denied(gate)) return gate
       const auth = getOAuthClient()
       const { tokens } = await auth.getToken(code)
       saveToken(tokens as Record<string, string>)
@@ -78,9 +104,11 @@ export function registerGmailHandlers(): void {
   })
 
   // Disconnect Gmail
-  ipcMain.handle('gmail:disconnect', async (): Promise<IpcResponse<void>> => {
+  ipcMain.handle('gmail:disconnect', async (_e, opts?: { actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
       const db = getDb()
+      const gate = requireRole(db, opts?.actor, 'super_admin')
+      if (denied(gate)) return gate
       db.prepare("DELETE FROM app_settings WHERE key IN ('gmail_token','gmail_connected','gmail_email')").run()
       return { success: true }
     } catch (err: any) {
@@ -89,8 +117,12 @@ export function registerGmailHandlers(): void {
   })
 
   // Poll inbox for vendor invoice emails
-  ipcMain.handle('gmail:poll', async (): Promise<IpcResponse<number>> => {
+  // Polling writes invoice rows for the whole company, so it sits above a
+  // store manager even though it isn't a settings change.
+  ipcMain.handle('gmail:poll', async (_e, opts?: { actor?: Actor }): Promise<IpcResponse<number>> => {
     try {
+      const gate = requireRole(getDb(), opts?.actor, 'director')
+      if (denied(gate)) return gate
       const token = getSavedToken()
       if (!token) return { success: false, error: 'Gmail not connected' }
 
@@ -183,6 +215,9 @@ export function registerGmailHandlers(): void {
   // Open auth URL in default browser
   ipcMain.handle('gmail:openUrl', async (_e, url: string): Promise<IpcResponse<void>> => {
     try {
+      if (!isOpenable(url)) {
+        return { success: false, error: 'That link cannot be opened from here.' }
+      }
       await shell.openExternal(url)
       return { success: true }
     } catch (err: any) {

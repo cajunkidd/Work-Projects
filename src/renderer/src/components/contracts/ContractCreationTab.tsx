@@ -6,6 +6,7 @@ import Underline from '@tiptap/extension-underline'
 import type { Clause, ContractTemplate, SigningRequest, SigningRequestStatus } from '../../../../shared/types'
 import ClausePickerModal from './ClausePickerModal'
 import TemplateLibraryModal from './TemplateLibraryModal'
+import { useActor } from '../../lib/actor'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -198,6 +199,7 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
   const [savedTemplateId, setSavedTemplateId] = useState<number | undefined>()
   const [showClausePicker, setShowClausePicker] = useState(false)
   const [showTemplates, setShowTemplates] = useState(false)
+  const actor = useActor()
 
   const editor = useEditor({
     extensions: [
@@ -284,6 +286,7 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
     const content = JSON.stringify(editor?.getJSON() ?? {})
     const res = await window.api.contractCreation.saveTemplate({
       id: savedTemplateId,
+      actor,
       title,
       content
     })
@@ -317,6 +320,7 @@ function BuildPanel({ onSent }: { onSent: () => void }) {
 
     setMsg('Sending to Documenso...')
     const sendRes = await window.api.contractCreation.send({
+      actor,
       templateId: savedTemplateId,
       documentTitle: title,
       recipientName,
@@ -504,11 +508,12 @@ function UploadPanel({ onSent }: { onSent: () => void }) {
   const [sending, setSending] = useState(false)
   const [msg, setMsg] = useState('')
   const [showTemplates, setShowTemplates] = useState(false)
+  const actor = useActor()
 
   const handleUpload = async () => {
     setUploading(true)
     setMsg('')
-    const res = await window.api.contractCreation.uploadTemplate()
+    const res = await window.api.contractCreation.uploadTemplate({ actor })
     setUploading(false)
     if (res.success && res.data) {
       setTemplate(res.data)
@@ -529,6 +534,7 @@ function UploadPanel({ onSent }: { onSent: () => void }) {
     setMsg('Sending to Documenso...')
 
     const res = await window.api.contractCreation.send({
+      actor,
       templateId: template.id,
       documentTitle: title,
       recipientName,

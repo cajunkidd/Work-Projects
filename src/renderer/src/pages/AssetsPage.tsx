@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import Card from '../components/ui/Card'
 import Button from '../components/ui/Button'
+import { currentActor } from '../lib/actor'
 import type { BranchAsset, AssetType } from '../../../shared/types'
 
 // Types that count toward per-machine contract allocations
@@ -110,7 +111,7 @@ export default function AssetsPage() {
         rows.push({ branch_id: branchId, asset_type: key, count: counts[key] })
       }
     }
-    const res = await window.api.assets.save(rows)
+    const res = await window.api.assets.save(rows, currentActor())
     setSaving(false)
     if (res.success) {
       setSaveMsg('Saved!')

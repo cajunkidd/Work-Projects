@@ -3,7 +3,8 @@ import fs from 'fs'
 import path from 'path'
 import { getDb } from '../database'
 import { decryptFromStorage } from '../crypto/secrets'
-import type { IpcResponse, ContractTemplate, SigningRequest } from '../../shared/types'
+import { requireRole, denied, requireContractAccess } from '../authz'
+import type { Actor, IpcResponse, ContractTemplate, SigningRequest } from '../../shared/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -210,9 +211,11 @@ export function registerContractCreationHandlers(): void {
     'contractCreation:saveTemplate',
     async (
       _,
-      payload: { id?: number; title: string; content: string }
+      payload: { id?: number; title: string; content: string; actor?: Actor }
     ): Promise<IpcResponse<ContractTemplate>> => {
       try {
+        const gate = requireRole(db, payload.actor, 'director')
+        if (denied(gate)) return gate
         if (payload.id) {
           db.prepare('UPDATE contract_templates SET title = ?, content = ? WHERE id = ?').run(
             payload.title,
@@ -241,8 +244,10 @@ export function registerContractCreationHandlers(): void {
   // ── Upload a PDF/DOCX template via file dialog ────────────────────────────
   ipcMain.handle(
     'contractCreation:uploadTemplate',
-    async (_, payload?: { title?: string }): Promise<IpcResponse<ContractTemplate>> => {
+    async (_, payload?: { title?: string; actor?: Actor }): Promise<IpcResponse<ContractTemplate>> => {
       try {
+        const gate = requireRole(db, payload?.actor, 'director')
+        if (denied(gate)) return gate
         const result = await dialog.showOpenDialog({
           title: 'Select Contract Template',
           filters: [{ name: 'Documents', extensions: ['pdf', 'docx', 'doc'] }],
@@ -291,8 +296,11 @@ export function registerContractCreationHandlers(): void {
   // ── Delete a template ─────────────────────────────────────────────────────
   ipcMain.handle(
     'contractCreation:deleteTemplate',
-    async (_, id: number): Promise<IpcResponse<void>> => {
+    async (_, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
       try {
+        const id = typeof arg === 'number' ? arg : arg.id
+        const gate = requireRole(db, typeof arg === 'number' ? undefined : arg.actor, 'director')
+        if (denied(gate)) return gate
         db.prepare('DELETE FROM contract_templates WHERE id = ?').run(id)
         return { success: true }
       } catch (e: any) {
@@ -326,9 +334,19 @@ export function registerContractCreationHandlers(): void {
         recipientName: string
         recipientEmail: string
         documentPath: string
+        actor?: Actor
       }
     ): Promise<IpcResponse<{ requestId: number }>> => {
       try {
+        // Sending emails a contract to an outside counterparty for signature —
+        // the most consequential outbound action in the app.
+        const gate = requireRole(db, payload.actor, 'director')
+        if (denied(gate)) return gate
+        if (payload.contractId) {
+          const scope = requireContractAccess(db, payload.contractId, payload.actor)
+          if (scope) return scope
+        }
+
         const config = getDocumensoConfig()
         if (!config) {
           return {

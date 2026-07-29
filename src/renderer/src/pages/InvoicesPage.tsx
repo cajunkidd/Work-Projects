@@ -34,7 +34,7 @@ export default function InvoicesPage() {
   const handlePoll = async () => {
     setPolling(true)
     setPollMsg('')
-    const res = await window.api.gmail.poll()
+    const res = await window.api.gmail.poll({ actor })
     setPolling(false)
     if (res.success) {
       setPollMsg(`Imported ${res.data} new invoice(s)`)

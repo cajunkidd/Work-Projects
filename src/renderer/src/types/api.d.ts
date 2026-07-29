@@ -88,7 +88,7 @@ declare global {
         delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
         uploadFile: () => Promise<IpcResponse<any>>
         parseImport: () => Promise<IpcResponse<unknown[]>>
-        bulkCreate: (rows: any[]) => Promise<IpcResponse<any>>
+        bulkCreate: (rows: any[], actor?: any) => Promise<IpcResponse<any>>
       }
       lineItems: {
         list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<ContractLineItem[]>>
@@ -143,10 +143,10 @@ declare global {
         lock: (payload?: { forget?: boolean }) => Promise<IpcResponse<void>>
       }
       gmail: {
-        getAuthUrl: () => Promise<IpcResponse<string>>
-        connect: (code: string) => Promise<IpcResponse<string>>
-        disconnect: () => Promise<IpcResponse<void>>
-        poll: () => Promise<IpcResponse<number>>
+        getAuthUrl: (opts?: { actor?: any }) => Promise<IpcResponse<string>>
+        connect: (arg: string | { code: string; actor?: any }) => Promise<IpcResponse<string>>
+        disconnect: (opts?: { actor?: any }) => Promise<IpcResponse<void>>
+        poll: (opts?: { actor?: any }) => Promise<IpcResponse<number>>
         openUrl: (url: string) => Promise<IpcResponse<void>>
       }
       dashboard: {
@@ -155,7 +155,7 @@ declare global {
       }
       assets: {
         list: () => Promise<IpcResponse<BranchAsset[]>>
-        save: (rows: BranchAsset[]) => Promise<IpcResponse<void>>
+        save: (rows: BranchAsset[], actor?: any) => Promise<IpcResponse<void>>
         importFile: () => Promise<IpcResponse<any>>
       }
       allocations: {
@@ -171,7 +171,7 @@ declare global {
         saveTemplate: (payload: any) => Promise<IpcResponse<ContractTemplate>>
         uploadTemplate: (payload?: any) => Promise<IpcResponse<ContractTemplate>>
         listTemplates: () => Promise<IpcResponse<ContractTemplate[]>>
-        deleteTemplate: (id: number) => Promise<IpcResponse<void>>
+        deleteTemplate: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
         generatePdf: (html: string, title: string) => Promise<IpcResponse<{ path: string }>>
         send: (payload: any) => Promise<IpcResponse<SigningRequest>>
         listRequests: () => Promise<IpcResponse<SigningRequest[]>>
@@ -257,7 +257,7 @@ declare global {
       }
       ai: {
         settings: () => Promise<IpcResponse<AiSettings>>
-        test: () => Promise<IpcResponse<string>>
+        test: (opts?: { actor?: any }) => Promise<IpcResponse<string>>
         defaults: () => Promise<IpcResponse<{ model: string; effort: string }>>
       }
       extraction: {

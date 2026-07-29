@@ -45,7 +45,7 @@ contextBridge.exposeInMainWorld('api', {
       ipcRenderer.invoke('contracts:delete', arg),
     uploadFile: () => ipcRenderer.invoke('contracts:uploadFile'),
     parseImport: () => ipcRenderer.invoke('contracts:parseImport'),
-    bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows)
+    bulkCreate: (rows: any[], actor?: any) => ipcRenderer.invoke('contracts:bulkCreate', rows, actor)
   },
   lineItems: {
     list: (arg: any) => ipcRenderer.invoke('lineItems:list', arg),
@@ -108,10 +108,10 @@ contextBridge.exposeInMainWorld('api', {
 
   // Gmail
   gmail: {
-    getAuthUrl: () => ipcRenderer.invoke('gmail:getAuthUrl'),
-    connect: (code: string) => ipcRenderer.invoke('gmail:connect', code),
-    disconnect: () => ipcRenderer.invoke('gmail:disconnect'),
-    poll: () => ipcRenderer.invoke('gmail:poll'),
+    getAuthUrl: (opts?: any) => ipcRenderer.invoke('gmail:getAuthUrl', opts),
+    connect: (arg: any) => ipcRenderer.invoke('gmail:connect', arg),
+    disconnect: (opts?: any) => ipcRenderer.invoke('gmail:disconnect', opts),
+    poll: (opts?: any) => ipcRenderer.invoke('gmail:poll', opts),
     openUrl: (url: string) => ipcRenderer.invoke('gmail:openUrl', url)
   },
 
@@ -124,7 +124,7 @@ contextBridge.exposeInMainWorld('api', {
   // IT Assets
   assets: {
     list: () => ipcRenderer.invoke('assets:list'),
-    save: (rows: any[]) => ipcRenderer.invoke('assets:save', rows),
+    save: (rows: any[], actor?: any) => ipcRenderer.invoke('assets:save', rows, actor),
     importFile: () => ipcRenderer.invoke('assets:importFile')
   },
 
@@ -147,7 +147,7 @@ contextBridge.exposeInMainWorld('api', {
     saveTemplate: (payload: any) => ipcRenderer.invoke('contractCreation:saveTemplate', payload),
     uploadTemplate: (payload?: any) => ipcRenderer.invoke('contractCreation:uploadTemplate', payload),
     listTemplates: () => ipcRenderer.invoke('contractCreation:listTemplates'),
-    deleteTemplate: (id: number) => ipcRenderer.invoke('contractCreation:deleteTemplate', id),
+    deleteTemplate: (arg: any) => ipcRenderer.invoke('contractCreation:deleteTemplate', arg),
     generatePdf: (html: string, title: string) => ipcRenderer.invoke('contractCreation:generatePdf', html, title),
     send: (payload: any) => ipcRenderer.invoke('contractCreation:send', payload),
     listRequests: () => ipcRenderer.invoke('contractCreation:listRequests'),
@@ -243,7 +243,7 @@ contextBridge.exposeInMainWorld('api', {
   // AI extraction
   ai: {
     settings: () => ipcRenderer.invoke('ai:settings'),
-    test: () => ipcRenderer.invoke('ai:test'),
+    test: (opts?: any) => ipcRenderer.invoke('ai:test', opts),
     defaults: () => ipcRenderer.invoke('ai:defaults')
   },
   extraction: {

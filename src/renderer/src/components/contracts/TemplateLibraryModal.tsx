@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import Modal from '../ui/Modal'
 import Badge from '../ui/Badge'
+import { useActor } from '../../lib/actor'
 import type { ContractTemplate, ContractTemplateType } from '../../../../shared/types'
 
 /**
@@ -29,6 +30,7 @@ function fmtDate(value: string | null | undefined): string {
 }
 
 export default function TemplateLibraryModal({ open, onClose, only, onPick }: Props) {
+  const actor = useActor()
   const [templates, setTemplates] = useState<ContractTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -56,7 +58,7 @@ export default function TemplateLibraryModal({ open, onClose, only, onPick }: Pr
   }, [open, load])
 
   const handleDelete = async (id: number) => {
-    const res = await window.api.contractCreation.deleteTemplate(id)
+    const res = await window.api.contractCreation.deleteTemplate({ id, actor })
     if (res.success) {
       setTemplates((prev) => prev.filter((t) => t.id !== id))
       setConfirmId(null)

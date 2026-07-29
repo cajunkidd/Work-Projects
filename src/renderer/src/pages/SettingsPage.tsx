@@ -240,7 +240,7 @@ export default function SettingsPage() {
 
   // Gmail
   const handleGmailAuth = async () => {
-    const res = await window.api.gmail.getAuthUrl()
+    const res = await window.api.gmail.getAuthUrl({ actor: currentActor() })
     if (res.success && res.data) {
       await window.api.gmail.openUrl(res.data)
       setShowGmailCode(true)
@@ -248,7 +248,7 @@ export default function SettingsPage() {
   }
 
   const handleGmailConnect = async () => {
-    const res = await window.api.gmail.connect(authCode.trim())
+    const res = await window.api.gmail.connect({ code: authCode.trim(), actor: currentActor() })
     if (res.success) {
       setGmailConnected(true)
       setGmailEmail(res.data || '')
@@ -262,7 +262,7 @@ export default function SettingsPage() {
   }
 
   const handleGmailDisconnect = async () => {
-    await window.api.gmail.disconnect()
+    await window.api.gmail.disconnect({ actor: currentActor() })
     setGmailConnected(false)
     setGmailEmail('')
   }

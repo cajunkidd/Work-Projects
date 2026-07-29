@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { recordAudit, recordFieldChanges } from '../audit'
+import { requireRole, denied } from '../authz'
 import type { Actor, Clause, ClauseFilter, IpcResponse } from '../../shared/types'
 
 /**
@@ -98,6 +99,10 @@ export function registerClauseHandlers(): void {
     ): Promise<IpcResponse<Clause>> => {
       try {
         const db = getDb()
+        // The clause library is the company's approved standard language, so
+        // editing it sits above a store manager.
+        const gate = requireRole(db, payload.actor, 'director')
+        if (denied(gate)) return gate
         if (!payload.title?.trim()) return { success: false, error: 'A clause needs a title.' }
         if (!payload.body?.trim()) return { success: false, error: 'A clause needs body text.' }
 
@@ -147,6 +152,10 @@ export function registerClauseHandlers(): void {
     ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        // The clause library is the company's approved standard language, so
+        // editing it sits above a store manager.
+        const gate = requireRole(db, payload.actor, 'director')
+        if (denied(gate)) return gate
         const before = db.prepare('SELECT * FROM clauses WHERE id = ?').get(payload.id) as
           | Clause
           | undefined
@@ -188,6 +197,10 @@ export function registerClauseHandlers(): void {
     ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        // The clause library is the company's approved standard language, so
+        // editing it sits above a store manager.
+        const gate = requireRole(db, payload.actor, 'director')
+        if (denied(gate)) return gate
         const clause = db.prepare('SELECT title FROM clauses WHERE id = ?').get(payload.id) as
           | { title: string }
           | undefined
@@ -218,6 +231,10 @@ export function registerClauseHandlers(): void {
     async (_e, payload: { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        // The clause library is the company's approved standard language, so
+        // editing it sits above a store manager.
+        const gate = requireRole(db, payload.actor, 'director')
+        if (denied(gate)) return gate
         const clause = db.prepare('SELECT title FROM clauses WHERE id = ?').get(payload.id) as
           | { title: string }
           | undefined

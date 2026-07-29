@@ -10,6 +10,7 @@ import {
   DEFAULT_MODEL,
   DEFAULT_EFFORT
 } from '../ai/anthropic'
+import { requireRole, denied, requireContractAccess, requireRowContractAccess } from '../authz'
 import type {
   Actor,
   AiSettings,
@@ -44,7 +45,9 @@ export function registerExtractionHandlers(): void {
     }
   })
 
-  ipcMain.handle('ai:test', async (): Promise<IpcResponse<string>> => {
+  ipcMain.handle('ai:test', async (_e, opts?: { actor?: Actor }): Promise<IpcResponse<string>> => {
+    const gate = requireRole(getDb(), opts?.actor, 'super_admin')
+    if (denied(gate)) return gate
     try {
       const outcome = await testConnection(getDb())
       return outcome.ok
@@ -70,6 +73,11 @@ export function registerExtractionHandlers(): void {
       let runId: number | null = null
 
       try {
+        // Extraction reads the whole document and bills the Anthropic account,
+        // so it needs access to the contract the document belongs to.
+        const gate = requireRowContractAccess(db, 'documents', payload.document_id, payload.actor)
+        if (gate) return { success: false, error: 'Document not found' }
+
         const document = db
           .prepare('SELECT * FROM documents WHERE id = ?')
           .get(payload.document_id) as ContractDocument | undefined
@@ -205,6 +213,9 @@ export function registerExtractionHandlers(): void {
     ): Promise<IpcResponse<{ fields_applied: number; obligations_created: number }>> => {
       try {
         const db = getDb()
+        // Applying extracted terms rewrites the contract.
+        const gate = requireContractAccess(db, payload.contract_id, payload.actor)
+        if (gate) return gate
         const contract = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(payload.contract_id) as Record<string, unknown> | undefined

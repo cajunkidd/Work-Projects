@@ -110,7 +110,7 @@ export default function IntegrationsSection() {
 
   const testAi = async () => {
     setTesting(true)
-    const res = await window.api.ai.test()
+    const res = await window.api.ai.test({ actor })
     setTesting(false)
     flash(setAiMessage, res.success ? (res.data ?? 'Connected.') : `Error: ${res.error}`)
   }

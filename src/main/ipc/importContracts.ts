@@ -2,6 +2,7 @@ import { ipcMain, dialog } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb } from '../database'
+import { resolveActor, canAccessScope } from '../authz'
 import type { IpcResponse } from '../../shared/types'
 
 // ---------------------------------------------------------------------------
@@ -524,10 +525,24 @@ export function registerImportHandlers(): void {
   // Bulk create contracts from the reviewed/confirmed rows
   ipcMain.handle(
     'contracts:bulkCreate',
-    async (_e, rows: ParsedImportResult[]): Promise<IpcResponse<BulkCreateResult>> => {
+    async (
+      _e,
+      rows: ParsedImportResult[],
+      actor?: { id: number }
+    ): Promise<IpcResponse<BulkCreateResult>> => {
       const db = getDb()
       let created = 0
       const errors: BulkCreateResult['errors'] = []
+
+      // Bulk import creates contracts wholesale, each naming its own department
+      // and branch — so the same scope rule as contracts:create applies, per row.
+      const resolved = resolveActor(db, actor)
+      if (!resolved) {
+        return {
+          success: false,
+          error: 'Could not identify the acting user. Sign out and back in, then try again.'
+        }
+      }
 
       const insertContract = db.prepare(`
         INSERT INTO contracts
@@ -551,6 +566,11 @@ export function registerImportHandlers(): void {
             if (!r.vendor_name) throw new Error('vendor_name is required')
             if (!r.start_date) throw new Error('start_date is required')
             if (!r.end_date) throw new Error('end_date is required')
+            if (!canAccessScope(resolved, r.department_id ?? null, r.branch_id ?? null)) {
+              // Reported per row rather than failing the whole file — an import
+              // that is mostly in scope should still land.
+              throw new Error('outside your assigned departments and branches')
+            }
 
             const result = insertContract.run(
               r.vendor_name,
