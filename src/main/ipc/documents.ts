@@ -4,7 +4,7 @@ import path from 'path'
 import crypto from 'crypto'
 import { getDb, getDbDirectory } from '../database'
 import { recordAudit } from '../audit'
-import { resolveActor, contractScopeClause } from '../authz'
+import { resolveActor, contractScopeClause, requireContractAccess } from '../authz'
 import type {
   Actor,
   ContractDocument,
@@ -214,16 +214,23 @@ export function registerDocumentHandlers(): void {
     'documents:list',
     async (
       _e,
-      opts?: { contract_id?: number; vendor_id?: number }
+      opts?: { contract_id?: number; vendor_id?: number; actor?: Actor }
     ): Promise<IpcResponse<ContractDocument[]>> => {
       try {
         let query = `
           SELECT d.*, v.name as vendor_name
           FROM documents d
           LEFT JOIN vendors v ON d.vendor_id = v.id
+          LEFT JOIN contracts c ON d.contract_id = c.id
           WHERE 1=1
         `
         const params: number[] = []
+
+        // Same rule as search: a document is visible if its contract is.
+        const scope = contractScopeClause(resolveActor(getDb(), opts?.actor), 'c')
+        query += scope.sql
+        params.push(...scope.params)
+
         if (opts?.contract_id) {
           query += ' AND d.contract_id = ?'
           params.push(opts.contract_id)
@@ -244,8 +251,9 @@ export function registerDocumentHandlers(): void {
 
   ipcMain.handle(
     'documents:get',
-    async (_e, id: number): Promise<IpcResponse<ContractDocument>> => {
+    async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<ContractDocument>> => {
       try {
+        const id = typeof arg === 'number' ? arg : arg.id
         const row = getDb()
           .prepare(
             `SELECT d.*, v.name as vendor_name FROM documents d
@@ -253,6 +261,8 @@ export function registerDocumentHandlers(): void {
           )
           .get(id) as ContractDocument | undefined
         if (!row) return { success: false, error: 'Document not found' }
+        const gate = requireContractAccess(getDb(), row.contract_id, typeof arg === 'number' ? undefined : arg.actor)
+        if (gate) return { success: false, error: 'Document not found' }
         return { success: true, data: row }
       } catch (err: any) {
         return { success: false, error: err.message }

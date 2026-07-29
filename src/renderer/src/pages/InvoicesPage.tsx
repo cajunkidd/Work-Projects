@@ -5,6 +5,7 @@ import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import RoleGuard from '../components/layout/RoleGuard'
+import { useActor } from '../lib/actor'
 import type { Invoice } from '../../../shared/types'
 
 function fmt(n: number) {
@@ -14,20 +15,21 @@ function fmt(n: number) {
 export default function InvoicesPage() {
   const { selectedDeptId } = useThemeStore()
   const { can } = useAuthStore()
+  const actor = useActor()
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [polling, setPolling] = useState(false)
   const [pollMsg, setPollMsg] = useState('')
   const [showRemoved, setShowRemoved] = useState(false)
 
   const load = () => {
-    const opts: any = { show_deleted: showRemoved }
+    const opts: any = { show_deleted: showRemoved, actor }
     if (selectedDeptId) opts.department_id = selectedDeptId
     window.api.invoices.list(opts).then((res) => {
       if (res.success && res.data) setInvoices(res.data)
     })
   }
 
-  useEffect(() => { load() }, [selectedDeptId, showRemoved])
+  useEffect(() => { load() }, [selectedDeptId, showRemoved, actor?.id])
 
   const handlePoll = async () => {
     setPolling(true)

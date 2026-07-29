@@ -348,6 +348,7 @@ export interface AuditFilter {
   to_date?: string
   search?: string
   limit?: number
+  actor?: Actor
 }
 
 // ─── Approval Workflows ──────────────────────────────────────────────────────

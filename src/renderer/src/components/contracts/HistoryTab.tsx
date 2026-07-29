@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Card from '../ui/Card'
 import Badge from '../ui/Badge'
+import { useActor } from '../../lib/actor'
 import type { AuditEntry } from '../../../../shared/types'
 
 interface Props {
@@ -20,17 +21,18 @@ const ACTION_STYLES: Record<string, 'success' | 'warning' | 'danger' | 'info' | 
 }
 
 export default function HistoryTab({ contractId }: Props) {
+  const actor = useActor()
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     window.api.audit
-      .entityHistory({ entity_type: 'contract', entity_id: contractId })
+      .entityHistory({ entity_type: 'contract', entity_id: contractId, actor })
       .then((res) => {
         if (res.success && res.data) setEntries(res.data)
         setLoading(false)
       })
-  }, [contractId])
+  }, [contractId, actor?.id])
 
   if (loading) return <p className="text-slate-400 text-sm">Loading history…</p>
 

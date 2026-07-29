@@ -48,12 +48,12 @@ contextBridge.exposeInMainWorld('api', {
     bulkCreate: (rows: any[]) => ipcRenderer.invoke('contracts:bulkCreate', rows)
   },
   lineItems: {
-    list: (contract_id: number) => ipcRenderer.invoke('lineItems:list', contract_id),
+    list: (arg: any) => ipcRenderer.invoke('lineItems:list', arg),
     upsert: (items: any[]) => ipcRenderer.invoke('lineItems:upsert', items),
     delete: (id: number) => ipcRenderer.invoke('lineItems:delete', id)
   },
   renewals: {
-    list: (contract_id: number) => ipcRenderer.invoke('renewals:list', contract_id),
+    list: (arg: any) => ipcRenderer.invoke('renewals:list', arg),
     create: (payload: any) => ipcRenderer.invoke('renewals:create', payload)
   },
 
@@ -67,7 +67,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Competitors
   competitors: {
-    list: (contract_id: number) => ipcRenderer.invoke('competitors:list', contract_id),
+    list: (arg: any) => ipcRenderer.invoke('competitors:list', arg),
     create: (payload: any) => ipcRenderer.invoke('competitors:create', payload),
     delete: (id: number) => ipcRenderer.invoke('competitors:delete', id),
     pickFile: () => ipcRenderer.invoke('competitors:pickFile')
@@ -83,7 +83,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Notes
   notes: {
-    list: (contract_id: number) => ipcRenderer.invoke('notes:list', contract_id),
+    list: (arg: any) => ipcRenderer.invoke('notes:list', arg),
     create: (payload: any) => ipcRenderer.invoke('notes:create', payload),
     delete: (id: number) => ipcRenderer.invoke('notes:delete', id)
   },
@@ -130,9 +130,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // IT Contract Allocations
   allocations: {
-    list: (contract_id: number) => ipcRenderer.invoke('allocations:list', contract_id),
-    save: (contract_id: number, allocations: any[]) =>
-      ipcRenderer.invoke('allocations:save', contract_id, allocations)
+    list: (arg: any) => ipcRenderer.invoke('allocations:list', arg),
+    save: (contract_id: number, allocations: any[], actor?: any) =>
+      ipcRenderer.invoke('allocations:save', contract_id, allocations, actor)
   },
 
   // Exports
@@ -159,8 +159,8 @@ contextBridge.exposeInMainWorld('api', {
   audit: {
     list: (filter?: any) => ipcRenderer.invoke('audit:list', filter),
     entityHistory: (opts: any) => ipcRenderer.invoke('audit:entityHistory', opts),
-    actors: () => ipcRenderer.invoke('audit:actors'),
-    stats: () => ipcRenderer.invoke('audit:stats')
+    actors: (opts?: any) => ipcRenderer.invoke('audit:actors', opts),
+    stats: (opts?: any) => ipcRenderer.invoke('audit:stats', opts)
   },
 
   // Approval Workflows
@@ -182,8 +182,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Contract Versions & Redlining
   versions: {
-    list: (contract_id: number) => ipcRenderer.invoke('versions:list', contract_id),
-    get: (id: number) => ipcRenderer.invoke('versions:get', id),
+    list: (arg: any) => ipcRenderer.invoke('versions:list', arg),
+    get: (arg: any) => ipcRenderer.invoke('versions:get', arg),
     create: (payload: any) => ipcRenderer.invoke('versions:create', payload),
     importFile: () => ipcRenderer.invoke('versions:importFile'),
     diff: (opts: any) => ipcRenderer.invoke('versions:diff', opts),
@@ -220,7 +220,7 @@ contextBridge.exposeInMainWorld('api', {
   documents: {
     upload: (payload: any) => ipcRenderer.invoke('documents:upload', payload),
     list: (opts?: any) => ipcRenderer.invoke('documents:list', opts),
-    get: (id: number) => ipcRenderer.invoke('documents:get', id),
+    get: (arg: any) => ipcRenderer.invoke('documents:get', arg),
     search: (opts: any) => ipcRenderer.invoke('documents:search', opts),
     indexStats: () => ipcRenderer.invoke('documents:indexStats'),
     open: (id: number) => ipcRenderer.invoke('documents:open', id),

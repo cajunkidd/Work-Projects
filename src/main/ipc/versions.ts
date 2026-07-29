@@ -4,6 +4,7 @@ import path from 'path'
 import { getDb } from '../database'
 import { recordAudit, touchContract } from '../audit'
 import { diffText, diffStats, compareRecords } from '../../shared/diff'
+import { requireContractAccess } from '../authz'
 import type {
   Actor,
   Contract,
@@ -67,8 +68,11 @@ async function extractText(filePath: string): Promise<string> {
 export function registerVersionHandlers(): void {
   ipcMain.handle(
     'versions:list',
-    async (_e, contract_id: number): Promise<IpcResponse<ContractVersion[]>> => {
+    async (_e, arg: number | { contract_id: number; actor?: Actor }): Promise<IpcResponse<ContractVersion[]>> => {
       try {
+        const contract_id = typeof arg === 'number' ? arg : arg.contract_id
+        const gate = requireContractAccess(getDb(), contract_id, typeof arg === 'number' ? undefined : arg.actor)
+        if (gate) return gate
         const rows = getDb()
           .prepare(
             `SELECT * FROM contract_versions WHERE contract_id = ? ORDER BY version_no DESC`
@@ -81,12 +85,17 @@ export function registerVersionHandlers(): void {
     }
   )
 
-  ipcMain.handle('versions:get', async (_e, id: number): Promise<IpcResponse<ContractVersion>> => {
+  ipcMain.handle('versions:get', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<ContractVersion>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
       const row = getDb()
         .prepare('SELECT * FROM contract_versions WHERE id = ?')
         .get(id) as ContractVersion | undefined
       if (!row) return { success: false, error: 'Version not found' }
+      // A version carries the full contract terms, so it inherits the
+      // contract's visibility.
+      const gate = requireContractAccess(getDb(), row.contract_id, typeof arg === 'number' ? undefined : arg.actor)
+      if (gate) return { success: false, error: 'Version not found' }
       return { success: true, data: row }
     } catch (err: any) {
       return { success: false, error: err.message }

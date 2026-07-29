@@ -4,6 +4,7 @@ import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
+import { useActor } from '../lib/actor'
 import type { AuditAction, AuditEntityType, AuditEntry } from '../../../shared/types'
 
 const ACTION_STYLES: Record<string, 'success' | 'warning' | 'danger' | 'info' | 'neutral'> = {
@@ -42,6 +43,7 @@ const ACTION_OPTIONS: { value: string; label: string }[] = [
 ]
 
 export default function AuditLogPage() {
+  const actor = useActor()
   const [entries, setEntries] = useState<AuditEntry[]>([])
   const [stats, setStats] = useState({ total: 0, today: 0, this_week: 0, actors: 0 })
   const [actors, setActors] = useState<{ user_id: number | null; user_name: string }[]>([])
@@ -64,11 +66,12 @@ export default function AuditLogPage() {
       user_id: userId === '' ? undefined : Number(userId),
       from_date: fromDate || undefined,
       to_date: toDate || undefined,
-      limit
+      limit,
+      actor
     })
     if (res.success && res.data) setEntries(res.data)
     setLoading(false)
-  }, [search, entityType, action, userId, fromDate, toDate, limit])
+  }, [search, entityType, action, userId, fromDate, toDate, limit, actor?.id])
 
   useEffect(() => {
     const timer = setTimeout(load, 200)
@@ -76,13 +79,13 @@ export default function AuditLogPage() {
   }, [load])
 
   useEffect(() => {
-    window.api.audit.stats().then((res) => {
+    window.api.audit.stats({ actor }).then((res) => {
       if (res.success && res.data) setStats(res.data)
     })
-    window.api.audit.actors().then((res) => {
+    window.api.audit.actors({ actor }).then((res) => {
       if (res.success && res.data) setActors(res.data)
     })
-  }, [])
+  }, [actor?.id])
 
   const exportLog = async () => {
     const rows = entries.map((e) => ({

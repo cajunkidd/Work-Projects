@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
+import { requireRole, denied, requireContractAccess } from '../authz'
 import type { AuditEntry, AuditFilter, IpcResponse } from '../../shared/types'
 
 const DEFAULT_LIMIT = 200
@@ -11,6 +12,12 @@ export function registerAuditHandlers(): void {
     'audit:list',
     async (_e, filter?: AuditFilter): Promise<IpcResponse<AuditEntry[]>> => {
       try {
+        // The log spans contracts, users, settings, and approvals in one
+        // stream, so it can't be filtered down to a branch meaningfully — it is
+        // a compliance view, restricted to director and above.
+        const gate = requireRole(getDb(), filter?.actor, 'director')
+        if (denied(gate)) return gate
+
         let query = 'SELECT * FROM audit_log WHERE 1=1'
         const params: (string | number)[] = []
 
@@ -61,9 +68,20 @@ export function registerAuditHandlers(): void {
     'audit:entityHistory',
     async (
       _e,
-      opts: { entity_type: string; entity_id: number }
+      opts: { entity_type: string; entity_id: number; actor?: { id: number } }
     ): Promise<IpcResponse<AuditEntry[]>> => {
       try {
+        // A contract's own history is visible to anyone who can open the
+        // contract — that's the History tab. History for anything else (users,
+        // settings, approval rules) is a compliance view, director and above.
+        if (opts.entity_type === 'contract') {
+          const gate = requireContractAccess(getDb(), opts.entity_id, opts.actor)
+          if (gate) return gate
+        } else {
+          const gate = requireRole(getDb(), opts.actor, 'director')
+          if (denied(gate)) return gate
+        }
+
         const rows = getDb()
           .prepare(
             `SELECT * FROM audit_log
@@ -81,8 +99,13 @@ export function registerAuditHandlers(): void {
   // Distinct actors, for the audit log's user filter dropdown
   ipcMain.handle(
     'audit:actors',
-    async (): Promise<IpcResponse<{ user_id: number | null; user_name: string }[]>> => {
+    async (
+      _e,
+      opts?: { actor?: { id: number } }
+    ): Promise<IpcResponse<{ user_id: number | null; user_name: string }[]>> => {
       try {
+        const gate = requireRole(getDb(), opts?.actor, 'director')
+        if (denied(gate)) return gate
         const rows = getDb()
           .prepare(
             `SELECT DISTINCT user_id, user_name FROM audit_log ORDER BY user_name COLLATE NOCASE`
@@ -98,11 +121,16 @@ export function registerAuditHandlers(): void {
   // Summary counts for the audit dashboard strip
   ipcMain.handle(
     'audit:stats',
-    async (): Promise<
+    async (
+      _e,
+      opts?: { actor?: { id: number } }
+    ): Promise<
       IpcResponse<{ total: number; today: number; this_week: number; actors: number }>
     > => {
       try {
         const db = getDb()
+        const gate = requireRole(db, opts?.actor, 'director')
+        if (denied(gate)) return gate
         const row = db
           .prepare(
             `SELECT

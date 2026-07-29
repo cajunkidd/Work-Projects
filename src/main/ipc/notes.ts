@@ -1,13 +1,17 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { recordAudit } from '../audit'
+import { requireContractAccess } from '../authz'
 import type { Actor, IpcResponse, VendorNote } from '../../shared/types'
 
 export function registerNoteHandlers(): void {
   ipcMain.handle(
     'notes:list',
-    async (_e, contract_id: number): Promise<IpcResponse<VendorNote[]>> => {
+    async (_e, arg: number | { contract_id: number; actor?: Actor }): Promise<IpcResponse<VendorNote[]>> => {
       try {
+        const contract_id = typeof arg === 'number' ? arg : arg.contract_id
+        const gate = requireContractAccess(getDb(), contract_id, typeof arg === 'number' ? undefined : arg.actor)
+        if (gate) return gate
         const rows = getDb()
           .prepare('SELECT * FROM vendor_notes WHERE contract_id = ? ORDER BY created_at DESC')
           .all(contract_id) as VendorNote[]

@@ -24,7 +24,7 @@ export default function CompetitorsPage() {
         setContracts(res.data)
         const offeringsMap: Record<number, CompetitorOffering[]> = {}
         for (const c of res.data) {
-          const cRes = await window.api.competitors.list(c.id)
+          const cRes = await window.api.competitors.list({ contract_id: c.id, actor })
           if (cRes.success && cRes.data) offeringsMap[c.id] = cRes.data
         }
         setOfferings(offeringsMap)

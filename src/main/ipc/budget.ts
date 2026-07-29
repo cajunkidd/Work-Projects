@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import { requireRole, denied, resolveActor } from '../authz'
+import { requireRole, denied, resolveActor, contractScopeClause, requireContractAccess } from '../authz'
 import { notifyBudgetUpdated } from '../emailNotifier'
 import type {
   IpcResponse,
@@ -372,9 +372,12 @@ export function registerBudgetHandlers(): void {
 
   ipcMain.handle(
     'allocations:list',
-    async (_e, contract_id: number): Promise<IpcResponse<ContractAllocation[]>> => {
+    async (_e, arg: number | { contract_id: number; actor?: any }): Promise<IpcResponse<ContractAllocation[]>> => {
       try {
         const db = getDb()
+        const contract_id = typeof arg === 'number' ? arg : arg.contract_id
+        const gate = requireContractAccess(db, contract_id, typeof arg === 'number' ? undefined : arg.actor)
+        if (gate) return gate
         const rows = db
           .prepare(
             `SELECT ca.*,
@@ -571,10 +574,13 @@ export function registerBudgetHandlers(): void {
     async (
       _e,
       contract_id: number,
-      allocations: Omit<ContractAllocation, 'id' | 'created_at'>[]
+      allocations: Omit<ContractAllocation, 'id' | 'created_at'>[],
+      actor?: { id: number }
     ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireContractAccess(db, contract_id, actor)
+        if (gate) return gate
         db.transaction(() => {
           db.prepare('DELETE FROM contract_allocations WHERE contract_id = ?').run(contract_id)
           const ins = db.prepare(

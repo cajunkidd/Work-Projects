@@ -23,7 +23,7 @@ export default function ProjectsPage() {
   const [form, setForm] = useState({ contract_id: '', name: '', status: 'active', start_date: '', end_date: '', description: '' })
 
   const load = () => {
-    const opts: any = {}
+    const opts: any = { actor }
     if (selectedDeptId) opts.department_id = selectedDeptId
     window.api.projects.list(opts).then((res) => {
       if (res.success && res.data) setProjects(res.data)

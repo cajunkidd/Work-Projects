@@ -9,6 +9,7 @@ import Modal from '../components/ui/Modal'
 import Input from '../components/ui/Input'
 import Select from '../components/ui/Select'
 import RoleGuard from '../components/layout/RoleGuard'
+import { currentActor } from '../lib/actor'
 import type { Contract, Department, Branch } from '../../../shared/types'
 import AllocationEditor, { type AllocationRow } from '../components/contracts/AllocationEditor'
 import ImportContractsModal from '../components/contracts/ImportContractsModal'
@@ -187,7 +188,7 @@ export default function ContractsPage() {
           allocation_type: r.allocationType,
           value: parseFloat(r.value)
         }))
-      if (toSave.length > 0) await window.api.allocations.save(res.data.id, toSave)
+      if (toSave.length > 0) await window.api.allocations.save(res.data.id, toSave, currentActor())
     }
     setSaving(false)
     if (res.success) {

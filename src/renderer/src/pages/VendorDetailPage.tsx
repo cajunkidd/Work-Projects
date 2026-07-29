@@ -44,7 +44,7 @@ export default function VendorDetailPage() {
     const [vendorRes, contractRes, docRes] = await Promise.all([
       window.api.vendors.get(vendorId),
       window.api.contracts.list({ actor }),
-      window.api.documents.list({ vendor_id: vendorId })
+      window.api.documents.list({ vendor_id: vendorId, actor })
     ])
     if (vendorRes.success && vendorRes.data) {
       setVendor(vendorRes.data)

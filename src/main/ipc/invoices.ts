@@ -1,11 +1,12 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import type { IpcResponse, Invoice } from '../../shared/types'
+import { resolveActor, contractScopeClause } from '../authz'
+import type { Actor, IpcResponse, Invoice } from '../../shared/types'
 
 export function registerInvoiceHandlers(): void {
   ipcMain.handle(
     'invoices:list',
-    async (_e, opts?: { department_id?: number; show_deleted?: boolean }): Promise<IpcResponse<Invoice[]>> => {
+    async (_e, opts?: { department_id?: number; show_deleted?: boolean; actor?: Actor }): Promise<IpcResponse<Invoice[]>> => {
       try {
         const db = getDb()
         // `is_deleted` is a soft delete, so removed invoices are recoverable —
@@ -18,6 +19,12 @@ export function registerInvoiceHandlers(): void {
           WHERE 1=1
         `
         const params: (string | number)[] = []
+
+        // An invoice is visible if the contract it bills against is. Invoices
+        // with no contract are super-admin only — there is no scope to judge.
+        const scope = contractScopeClause(resolveActor(db, opts?.actor), 'c')
+        query += scope.sql
+        params.push(...scope.params)
 
         if (!opts?.show_deleted) {
           query += ' AND i.is_deleted = 0'

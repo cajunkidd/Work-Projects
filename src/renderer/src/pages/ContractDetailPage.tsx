@@ -92,22 +92,22 @@ export default function ContractDetailPage() {
     window.api.contracts.get({ id: contractId, actor }).then((res) => {
       if (res.success && res.data) setContract(res.data)
     })
-    window.api.lineItems.list(contractId).then((res) => {
+    window.api.lineItems.list({ contract_id: contractId, actor }).then((res) => {
       if (res.success && res.data) setLineItems(res.data)
     })
-    window.api.renewals.list(contractId).then((res) => {
+    window.api.renewals.list({ contract_id: contractId, actor }).then((res) => {
       if (res.success && res.data) setRenewals(res.data)
     })
-    window.api.notes.list(contractId).then((res) => {
+    window.api.notes.list({ contract_id: contractId, actor }).then((res) => {
       if (res.success && res.data) setNotes(res.data)
     })
-    window.api.projects.list({ contract_id: contractId }).then((res) => {
+    window.api.projects.list({ contract_id: contractId, actor }).then((res) => {
       if (res.success && res.data) setProjects(res.data)
     })
-    window.api.competitors.list(contractId).then((res) => {
+    window.api.competitors.list({ contract_id: contractId, actor }).then((res) => {
       if (res.success && res.data) setCompetitors(res.data)
     })
-    window.api.allocations.list(contractId).then((res) => {
+    window.api.allocations.list({ contract_id: contractId, actor }).then((res) => {
       if (res.success && res.data) setAllocations(res.data)
     })
     window.api.branches.list().then((res) => {
@@ -120,7 +120,7 @@ export default function ContractDetailPage() {
 
   const saveLineItems = async () => {
     await window.api.lineItems.upsert(lineItems)
-    const res = await window.api.lineItems.list(contractId)
+    const res = await window.api.lineItems.list({ contract_id: contractId, actor })
     if (res.success && res.data) setLineItems(res.data)
   }
 
@@ -154,7 +154,7 @@ export default function ContractDetailPage() {
       license_count_change: parseInt(renewalForm.license_count_change) || 0,
       reason: renewalForm.reason
     })
-    const res = await window.api.renewals.list(contractId)
+    const res = await window.api.renewals.list({ contract_id: contractId, actor })
     if (res.success && res.data) setRenewals(res.data)
     setShowRenewalModal(false)
     setRenewalForm({ renewal_date: '', prev_cost: '', new_cost: '', license_count_change: '0', reason: '' })
@@ -163,7 +163,7 @@ export default function ContractDetailPage() {
   const saveNote = async (e: React.FormEvent) => {
     e.preventDefault()
     await window.api.notes.create({ contract_id: contractId, note: noteText, created_by: user?.name || 'Unknown', actor })
-    const res = await window.api.notes.list(contractId)
+    const res = await window.api.notes.list({ contract_id: contractId, actor })
     if (res.success && res.data) setNotes(res.data)
     setShowNoteModal(false)
     setNoteText('')
@@ -172,7 +172,7 @@ export default function ContractDetailPage() {
   const saveProject = async (e: React.FormEvent) => {
     e.preventDefault()
     await window.api.projects.create({ contract_id: contractId, ...projectForm } as any)
-    const res = await window.api.projects.list({ contract_id: contractId })
+    const res = await window.api.projects.list({ contract_id: contractId, actor })
     if (res.success && res.data) setProjects(res.data)
     setShowProjectModal(false)
     setProjectForm({ name: '', status: 'active', start_date: '', end_date: '', description: '' })
@@ -187,7 +187,7 @@ export default function ContractDetailPage() {
       price: parseFloat(competitorForm.price) || 0,
       notes: competitorForm.notes
     })
-    const res = await window.api.competitors.list(contractId)
+    const res = await window.api.competitors.list({ contract_id: contractId, actor })
     if (res.success && res.data) setCompetitors(res.data)
     setShowCompetitorModal(false)
     setCompetitorForm({ competitor_vendor: '', offering_name: '', price: '', notes: '' })
@@ -211,8 +211,8 @@ export default function ContractDetailPage() {
         allocation_type: r.allocationType,
         value: parseFloat(r.value)
       }))
-    await window.api.allocations.save(contract.id, toSave)
-    const res = await window.api.allocations.list(contract.id)
+    await window.api.allocations.save(contract.id, toSave, actor)
+    const res = await window.api.allocations.list({ contract_id: contract.id, actor })
     if (res.success && res.data) setAllocations(res.data)
     setSavingAllocations(false)
     setEditingAllocations(false)

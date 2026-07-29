@@ -1,12 +1,16 @@
 import { ipcMain, dialog } from 'electron'
 import { getDb } from '../database'
-import type { IpcResponse, CompetitorOffering } from '../../shared/types'
+import { requireContractAccess } from '../authz'
+import type { Actor, IpcResponse, CompetitorOffering } from '../../shared/types'
 
 export function registerCompetitorHandlers(): void {
   ipcMain.handle(
     'competitors:list',
-    async (_e, contract_id: number): Promise<IpcResponse<CompetitorOffering[]>> => {
+    async (_e, arg: number | { contract_id: number; actor?: Actor }): Promise<IpcResponse<CompetitorOffering[]>> => {
       try {
+        const contract_id = typeof arg === 'number' ? arg : arg.contract_id
+        const gate = requireContractAccess(getDb(), contract_id, typeof arg === 'number' ? undefined : arg.actor)
+        if (gate) return gate
         const rows = getDb()
           .prepare(
             'SELECT * FROM competitor_offerings WHERE contract_id = ? ORDER BY created_at DESC'

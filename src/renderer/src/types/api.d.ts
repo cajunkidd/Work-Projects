@@ -91,12 +91,12 @@ declare global {
         bulkCreate: (rows: any[]) => Promise<IpcResponse<any>>
       }
       lineItems: {
-        list: (contract_id: number) => Promise<IpcResponse<ContractLineItem[]>>
+        list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<ContractLineItem[]>>
         upsert: (items: ContractLineItem[]) => Promise<IpcResponse<void>>
         delete: (id: number) => Promise<IpcResponse<void>>
       }
       renewals: {
-        list: (contract_id: number) => Promise<IpcResponse<RenewalHistory[]>>
+        list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<RenewalHistory[]>>
         create: (payload: any) => Promise<IpcResponse<RenewalHistory>>
       }
       invoices: {
@@ -106,7 +106,7 @@ declare global {
         insert: (payload: any) => Promise<IpcResponse<Invoice>>
       }
       competitors: {
-        list: (contract_id: number) => Promise<IpcResponse<CompetitorOffering[]>>
+        list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<CompetitorOffering[]>>
         create: (payload: any) => Promise<IpcResponse<CompetitorOffering>>
         delete: (id: number) => Promise<IpcResponse<void>>
         pickFile: () => Promise<IpcResponse<string>>
@@ -118,7 +118,7 @@ declare global {
         delete: (id: number) => Promise<IpcResponse<void>>
       }
       notes: {
-        list: (contract_id: number) => Promise<IpcResponse<VendorNote[]>>
+        list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<VendorNote[]>>
         create: (payload: any) => Promise<IpcResponse<VendorNote>>
         delete: (id: number) => Promise<IpcResponse<void>>
       }
@@ -159,8 +159,8 @@ declare global {
         importFile: () => Promise<IpcResponse<any>>
       }
       allocations: {
-        list: (contract_id: number) => Promise<IpcResponse<ContractAllocation[]>>
-        save: (contract_id: number, allocations: Omit<ContractAllocation, 'id' | 'created_at'>[]) => Promise<IpcResponse<void>>
+        list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<ContractAllocation[]>>
+        save: (contract_id: number, allocations: Omit<ContractAllocation, 'id' | 'created_at'>[], actor?: any) => Promise<IpcResponse<void>>
       }
       exports: {
         invoices: (data: any[]) => Promise<IpcResponse<string>>
@@ -180,9 +180,9 @@ declare global {
       }
       audit: {
         list: (filter?: AuditFilter) => Promise<IpcResponse<AuditEntry[]>>
-        entityHistory: (opts: { entity_type: string; entity_id: number }) => Promise<IpcResponse<AuditEntry[]>>
-        actors: () => Promise<IpcResponse<{ user_id: number | null; user_name: string }[]>>
-        stats: () => Promise<IpcResponse<{ total: number; today: number; this_week: number; actors: number }>>
+        entityHistory: (opts: { entity_type: string; entity_id: number; actor?: any }) => Promise<IpcResponse<AuditEntry[]>>
+        actors: (opts?: { actor?: any }) => Promise<IpcResponse<{ user_id: number | null; user_name: string }[]>>
+        stats: (opts?: { actor?: any }) => Promise<IpcResponse<{ total: number; today: number; this_week: number; actors: number }>>
       }
       approvalRules: {
         list: () => Promise<IpcResponse<ApprovalRule[]>>
@@ -200,8 +200,8 @@ declare global {
         inboxCount: (opts: { user_id: number }) => Promise<IpcResponse<number>>
       }
       versions: {
-        list: (contract_id: number) => Promise<IpcResponse<ContractVersion[]>>
-        get: (id: number) => Promise<IpcResponse<ContractVersion>>
+        list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<ContractVersion[]>>
+        get: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<ContractVersion>>
         create: (payload: any) => Promise<IpcResponse<ContractVersion>>
         importFile: () => Promise<IpcResponse<{ path: string; text: string }>>
         diff: (opts: { from_id: number; to_id: number }) => Promise<IpcResponse<{
@@ -237,8 +237,8 @@ declare global {
       }
       documents: {
         upload: (payload: { contract_id?: number | null; vendor_id?: number | null; doc_type?: DocumentType; actor?: any }) => Promise<IpcResponse<ContractDocument>>
-        list: (opts?: { contract_id?: number; vendor_id?: number }) => Promise<IpcResponse<ContractDocument[]>>
-        get: (id: number) => Promise<IpcResponse<ContractDocument>>
+        list: (opts?: { contract_id?: number; vendor_id?: number; actor?: any }) => Promise<IpcResponse<ContractDocument[]>>
+        get: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<ContractDocument>>
         search: (opts: { query: string; contract_id?: number; doc_type?: DocumentType; limit?: number; actor?: any }) => Promise<IpcResponse<DocumentSearchHit[]>>
         indexStats: () => Promise<IpcResponse<{ total: number; indexed: number; no_text_layer: number; failed: number }>>
         open: (id: number) => Promise<IpcResponse<void>>

@@ -146,6 +146,43 @@ export function contractScopeClause(
 }
 
 /**
+ * Gate for anything hanging off a contract — line items, notes, versions,
+ * documents, obligations, renewals, competitor offerings, allocations.
+ *
+ * These handlers all take a bare `contract_id`. Without this check, being
+ * unable to open a contract didn't stop you from reading its pricing, its
+ * negotiation history, or the documents attached to it.
+ *
+ * Returns null when access is allowed, or an IpcResponse-shaped failure the
+ * handler can return directly. A contract that is missing and one that is out
+ * of scope give the same answer, so the refusal doesn't confirm it exists.
+ */
+export function requireContractAccess(
+  db: Database.Database,
+  contractId: number | null | undefined,
+  actor: Actor | { id?: number } | null | undefined
+): AuthzFailure | null {
+  const resolved = resolveActor(db, actor)
+  if (!resolved) {
+    return {
+      success: false,
+      error: 'Could not identify the acting user. Sign out and back in, then try again.'
+    }
+  }
+  if (resolved.role === 'super_admin') return null
+  if (!contractId) return { success: false, error: 'Contract not found.' }
+
+  const row = db
+    .prepare('SELECT department_id, branch_id FROM contracts WHERE id = ?')
+    .get(contractId) as { department_id: number | null; branch_id: number | null } | undefined
+  if (!row) return { success: false, error: 'Contract not found.' }
+  if (!canAccessScope(resolved, row.department_id, row.branch_id)) {
+    return { success: false, error: 'Contract not found.' }
+  }
+  return null
+}
+
+/**
  * Whether an actor may act on a contract in a given scope. Super admins see
  * everything; directors are limited to their assigned departments and
  * branches; store managers to their branches.

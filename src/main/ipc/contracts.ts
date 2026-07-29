@@ -10,7 +10,7 @@ import {
 import { recordAudit, recordFieldChanges } from '../audit'
 import { dispatchWebhook } from '../webhooks'
 import { linkContractToVendor } from '../vendorLink'
-import { resolveActor, contractScopeClause, canAccessScope } from '../authz'
+import { resolveActor, contractScopeClause, canAccessScope, requireContractAccess } from '../authz'
 import type {
   Actor,
   IpcResponse,
@@ -369,8 +369,12 @@ export function registerContractHandlers(): void {
   // Line items
   ipcMain.handle(
     'lineItems:list',
-    async (_e, contract_id: number): Promise<IpcResponse<ContractLineItem[]>> => {
+    async (_e, arg: number | { contract_id: number; actor?: Actor }): Promise<IpcResponse<ContractLineItem[]>> => {
       try {
+        const contract_id = typeof arg === 'number' ? arg : arg.contract_id
+        const actor = typeof arg === 'number' ? undefined : arg.actor
+        const gate = requireContractAccess(getDb(), contract_id, actor)
+        if (gate) return gate
         const rows = getDb()
           .prepare('SELECT * FROM contract_line_items WHERE contract_id = ?')
           .all(contract_id) as ContractLineItem[]
@@ -428,8 +432,12 @@ export function registerContractHandlers(): void {
   // Renewal history
   ipcMain.handle(
     'renewals:list',
-    async (_e, contract_id: number): Promise<IpcResponse<RenewalHistory[]>> => {
+    async (_e, arg: number | { contract_id: number; actor?: Actor }): Promise<IpcResponse<RenewalHistory[]>> => {
       try {
+        const contract_id = typeof arg === 'number' ? arg : arg.contract_id
+        const actor = typeof arg === 'number' ? undefined : arg.actor
+        const gate = requireContractAccess(getDb(), contract_id, actor)
+        if (gate) return gate
         const rows = getDb()
           .prepare('SELECT * FROM renewal_history WHERE contract_id = ? ORDER BY renewal_date DESC')
           .all(contract_id) as RenewalHistory[]

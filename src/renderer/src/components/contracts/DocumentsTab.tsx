@@ -58,7 +58,7 @@ export default function DocumentsTab({ contract, onContractChanged }: Props) {
 
   const load = useCallback(async () => {
     const [docRes, aiRes] = await Promise.all([
-      window.api.documents.list({ contract_id: contract.id }),
+      window.api.documents.list({ contract_id: contract.id, actor }),
       window.api.ai.settings()
     ])
     if (docRes.success && docRes.data) setDocuments(docRes.data)

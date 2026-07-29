@@ -52,7 +52,7 @@ export default function VersionsTab({ contractId, onContractChanged }: Props) {
   const [diffing, setDiffing] = useState(false)
 
   const load = useCallback(async () => {
-    const res = await window.api.versions.list(contractId)
+    const res = await window.api.versions.list({ contract_id: contractId, actor })
     if (res.success && res.data) {
       setVersions(res.data)
       // Default the comparison to the two most recent versions.

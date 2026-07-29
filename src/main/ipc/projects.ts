@@ -1,11 +1,12 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import type { IpcResponse, VendorProject } from '../../shared/types'
+import { resolveActor, contractScopeClause } from '../authz'
+import type { Actor, IpcResponse, VendorProject } from '../../shared/types'
 
 export function registerProjectHandlers(): void {
   ipcMain.handle(
     'projects:list',
-    async (_e, opts?: { contract_id?: number; department_id?: number }): Promise<IpcResponse<VendorProject[]>> => {
+    async (_e, opts?: { contract_id?: number; department_id?: number; actor?: Actor }): Promise<IpcResponse<VendorProject[]>> => {
       try {
         const db = getDb()
         let query = `
@@ -15,6 +16,12 @@ export function registerProjectHandlers(): void {
           WHERE 1=1
         `
         const params: (string | number)[] = []
+
+        // Projects hang off a contract, so they inherit its visibility.
+        const scope = contractScopeClause(resolveActor(db, opts?.actor), 'c')
+        query += scope.sql
+        params.push(...scope.params)
+
         if (opts?.contract_id) {
           query += ' AND vp.contract_id = ?'
           params.push(opts.contract_id)

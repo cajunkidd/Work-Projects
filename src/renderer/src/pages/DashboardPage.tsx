@@ -288,7 +288,7 @@ export default function DashboardPage() {
       }
     })
 
-    window.api.invoices.list().then((res) => {
+    window.api.invoices.list({ actor }).then((res) => {
       if (res.success && res.data) setRecentInvoices(res.data.slice(0, 5))
     })
 
@@ -296,7 +296,7 @@ export default function DashboardPage() {
       if (res.success && res.data) setSpendTrend(res.data)
     })
 
-    window.api.projects.list().then((res) => {
+    window.api.projects.list({ actor }).then((res) => {
       if (res.success && res.data) {
         const counts = { active: 0, on_hold: 0, completed: 0 }
         res.data.forEach((p: any) => {
