@@ -1,6 +1,6 @@
 import { ipcMain, dialog } from 'electron'
 import { getDb } from '../database'
-import { requireContractAccess } from '../authz'
+import { requireContractAccess, requireRowContractAccess } from '../authz'
 import type { Actor, IpcResponse, CompetitorOffering } from '../../shared/types'
 
 export function registerCompetitorHandlers(): void {
@@ -27,10 +27,12 @@ export function registerCompetitorHandlers(): void {
     'competitors:create',
     async (
       _e,
-      payload: Omit<CompetitorOffering, 'id' | 'created_at'>
+      payload: Omit<CompetitorOffering, 'id' | 'created_at'> & { actor?: Actor }
     ): Promise<IpcResponse<CompetitorOffering>> => {
       try {
         const db = getDb()
+        const gate = requireContractAccess(db, payload.contract_id, payload.actor)
+        if (gate) return gate
         const result = db
           .prepare(
             `INSERT INTO competitor_offerings
@@ -55,8 +57,13 @@ export function registerCompetitorHandlers(): void {
     }
   )
 
-  ipcMain.handle('competitors:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle('competitors:delete', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const gate = requireRowContractAccess(
+        getDb(), 'competitor_offerings', id, typeof arg === 'number' ? undefined : arg.actor
+      )
+      if (gate) return gate
       getDb().prepare('DELETE FROM competitor_offerings WHERE id = ?').run(id)
       return { success: true }
     } catch (err: any) {

@@ -49,8 +49,8 @@ contextBridge.exposeInMainWorld('api', {
   },
   lineItems: {
     list: (arg: any) => ipcRenderer.invoke('lineItems:list', arg),
-    upsert: (items: any[]) => ipcRenderer.invoke('lineItems:upsert', items),
-    delete: (id: number) => ipcRenderer.invoke('lineItems:delete', id)
+    upsert: (items: any[], actor?: any) => ipcRenderer.invoke('lineItems:upsert', items, actor),
+    delete: (arg: any) => ipcRenderer.invoke('lineItems:delete', arg)
   },
   renewals: {
     list: (arg: any) => ipcRenderer.invoke('renewals:list', arg),
@@ -60,8 +60,8 @@ contextBridge.exposeInMainWorld('api', {
   // Invoices
   invoices: {
     list: (opts?: any) => ipcRenderer.invoke('invoices:list', opts),
-    delete: (id: number) => ipcRenderer.invoke('invoices:delete', id),
-    restore: (id: number) => ipcRenderer.invoke('invoices:restore', id),
+    delete: (arg: any) => ipcRenderer.invoke('invoices:delete', arg),
+    restore: (arg: any) => ipcRenderer.invoke('invoices:restore', arg),
     insert: (payload: any) => ipcRenderer.invoke('invoices:insert', payload)
   },
 
@@ -69,7 +69,7 @@ contextBridge.exposeInMainWorld('api', {
   competitors: {
     list: (arg: any) => ipcRenderer.invoke('competitors:list', arg),
     create: (payload: any) => ipcRenderer.invoke('competitors:create', payload),
-    delete: (id: number) => ipcRenderer.invoke('competitors:delete', id),
+    delete: (arg: any) => ipcRenderer.invoke('competitors:delete', arg),
     pickFile: () => ipcRenderer.invoke('competitors:pickFile')
   },
 
@@ -78,14 +78,14 @@ contextBridge.exposeInMainWorld('api', {
     list: (opts?: any) => ipcRenderer.invoke('projects:list', opts),
     create: (payload: any) => ipcRenderer.invoke('projects:create', payload),
     update: (payload: any) => ipcRenderer.invoke('projects:update', payload),
-    delete: (id: number) => ipcRenderer.invoke('projects:delete', id)
+    delete: (arg: any) => ipcRenderer.invoke('projects:delete', arg)
   },
 
   // Notes
   notes: {
     list: (arg: any) => ipcRenderer.invoke('notes:list', arg),
     create: (payload: any) => ipcRenderer.invoke('notes:create', payload),
-    delete: (id: number) => ipcRenderer.invoke('notes:delete', id)
+    delete: (arg: any) => ipcRenderer.invoke('notes:delete', arg)
   },
 
   // Settings & Branding
@@ -223,11 +223,11 @@ contextBridge.exposeInMainWorld('api', {
     get: (arg: any) => ipcRenderer.invoke('documents:get', arg),
     search: (opts: any) => ipcRenderer.invoke('documents:search', opts),
     indexStats: () => ipcRenderer.invoke('documents:indexStats'),
-    open: (id: number) => ipcRenderer.invoke('documents:open', id),
-    saveAs: (id: number) => ipcRenderer.invoke('documents:saveAs', id),
+    open: (arg: any) => ipcRenderer.invoke('documents:open', arg),
+    saveAs: (arg: any) => ipcRenderer.invoke('documents:saveAs', arg),
     update: (payload: any) => ipcRenderer.invoke('documents:update', payload),
     delete: (payload: any) => ipcRenderer.invoke('documents:delete', payload),
-    reindex: (id: number) => ipcRenderer.invoke('documents:reindex', id)
+    reindex: (arg: any) => ipcRenderer.invoke('documents:reindex', arg)
   },
 
   // Obligations & milestones

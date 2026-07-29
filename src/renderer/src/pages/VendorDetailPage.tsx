@@ -282,7 +282,7 @@ export default function VendorDetailPage() {
                 className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0"
               >
                 <span className="text-white text-sm">{doc.title}</span>
-                <Button variant="ghost" size="sm" onClick={() => window.api.documents.open(doc.id)}>
+                <Button variant="ghost" size="sm" onClick={() => window.api.documents.open({ id: doc.id, actor })}>
                   Open
                 </Button>
               </div>

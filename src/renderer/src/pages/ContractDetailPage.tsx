@@ -119,7 +119,7 @@ export default function ContractDetailPage() {
   }, [contractId])
 
   const saveLineItems = async () => {
-    await window.api.lineItems.upsert(lineItems)
+    await window.api.lineItems.upsert(lineItems, actor)
     const res = await window.api.lineItems.list({ contract_id: contractId, actor })
     if (res.success && res.data) setLineItems(res.data)
   }
@@ -140,7 +140,7 @@ export default function ContractDetailPage() {
   }
 
   const deleteLineItem = async (i: number, item: ContractLineItem) => {
-    if (item.id) await window.api.lineItems.delete(item.id)
+    if (item.id) await window.api.lineItems.delete({ id: item.id, actor })
     setLineItems((prev) => prev.filter((_, idx) => idx !== i))
   }
 
@@ -148,6 +148,7 @@ export default function ContractDetailPage() {
     e.preventDefault()
     await window.api.renewals.create({
       contract_id: contractId,
+      actor,
       renewal_date: renewalForm.renewal_date,
       prev_cost: parseFloat(renewalForm.prev_cost) || 0,
       new_cost: parseFloat(renewalForm.new_cost) || 0,
@@ -171,7 +172,7 @@ export default function ContractDetailPage() {
 
   const saveProject = async (e: React.FormEvent) => {
     e.preventDefault()
-    await window.api.projects.create({ contract_id: contractId, ...projectForm } as any)
+    await window.api.projects.create({ contract_id: contractId, ...projectForm, actor } as any)
     const res = await window.api.projects.list({ contract_id: contractId, actor })
     if (res.success && res.data) setProjects(res.data)
     setShowProjectModal(false)
@@ -182,6 +183,7 @@ export default function ContractDetailPage() {
     e.preventDefault()
     await window.api.competitors.create({
       contract_id: contractId,
+      actor,
       competitor_vendor: competitorForm.competitor_vendor,
       offering_name: competitorForm.offering_name,
       price: parseFloat(competitorForm.price) || 0,

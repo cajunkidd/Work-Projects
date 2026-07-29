@@ -10,7 +10,13 @@ import {
 import { recordAudit, recordFieldChanges } from '../audit'
 import { dispatchWebhook } from '../webhooks'
 import { linkContractToVendor } from '../vendorLink'
-import { resolveActor, contractScopeClause, canAccessScope, requireContractAccess } from '../authz'
+import {
+  resolveActor,
+  contractScopeClause,
+  canAccessScope,
+  requireContractAccess,
+  requireRowContractAccess
+} from '../authz'
 import type {
   Actor,
   IpcResponse,
@@ -387,9 +393,29 @@ export function registerContractHandlers(): void {
 
   ipcMain.handle(
     'lineItems:upsert',
-    async (_e, items: ContractLineItem[]): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      items: ContractLineItem[],
+      actor?: Actor
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+
+        // Each row carries its own contract_id, so a single batch could span
+        // contracts. Every one has to be reachable, and an existing row is
+        // checked by its stored contract rather than the one just claimed —
+        // otherwise a row could be re-pointed into someone else's contract.
+        for (const item of items) {
+          const gate = item.id
+            ? requireRowContractAccess(db, 'contract_line_items', item.id, actor)
+            : requireContractAccess(db, item.contract_id, actor)
+          if (gate) return gate
+          if (item.id) {
+            const moved = requireContractAccess(db, item.contract_id, actor)
+            if (moved) return moved
+          }
+        }
+
         const upsert = db.prepare(`
           INSERT INTO contract_line_items (id, contract_id, description, quantity, unit_price, total_price)
           VALUES (@id, @contract_id, @description, @quantity, @unit_price, @total_price)
@@ -420,8 +446,13 @@ export function registerContractHandlers(): void {
     }
   )
 
-  ipcMain.handle('lineItems:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle('lineItems:delete', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const gate = requireRowContractAccess(
+        getDb(), 'contract_line_items', id, typeof arg === 'number' ? undefined : arg.actor
+      )
+      if (gate) return gate
       getDb().prepare('DELETE FROM contract_line_items WHERE id = ?').run(id)
       return { success: true }
     } catch (err: any) {
@@ -452,10 +483,12 @@ export function registerContractHandlers(): void {
     'renewals:create',
     async (
       _e,
-      payload: Omit<RenewalHistory, 'id'>
+      payload: Omit<RenewalHistory, 'id'> & { actor?: Actor }
     ): Promise<IpcResponse<RenewalHistory>> => {
       try {
         const db = getDb()
+        const gate = requireContractAccess(db, payload.contract_id, payload.actor)
+        if (gate) return gate
         const result = db
           .prepare(
             `INSERT INTO renewal_history (contract_id, renewal_date, prev_cost, new_cost, license_count_change, reason)

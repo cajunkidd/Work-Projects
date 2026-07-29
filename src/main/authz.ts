@@ -183,6 +183,65 @@ export function requireContractAccess(
 }
 
 /**
+ * Tables whose rows belong to a contract. Used to resolve a bare row id back to
+ * the contract that governs it.
+ *
+ * A whitelist rather than an interpolated caller-supplied name — the table goes
+ * straight into SQL, where a parameter can't be used.
+ */
+const CONTRACT_CHILD_TABLES = {
+  contract_line_items: 'contract_id',
+  renewal_history: 'contract_id',
+  vendor_notes: 'contract_id',
+  competitor_offerings: 'contract_id',
+  contract_allocations: 'contract_id',
+  vendor_projects: 'contract_id',
+  contract_versions: 'contract_id',
+  obligations: 'contract_id',
+  documents: 'contract_id',
+  invoices: 'contract_id'
+} as const
+
+export type ContractChildTable = keyof typeof CONTRACT_CHILD_TABLES
+
+/**
+ * Gate for a mutation that identifies its target by row id alone —
+ * `lineItems:delete`, `notes:delete`, `projects:update`, and friends.
+ *
+ * The read paths were closed first, but a delete taking a bare row id had the
+ * same hole: nothing tied the row back to a contract the actor may touch. This
+ * resolves the row's contract and applies the same check.
+ *
+ * A row that doesn't exist and one belonging to an unreachable contract give
+ * the same answer.
+ */
+export function requireRowContractAccess(
+  db: Database.Database,
+  table: ContractChildTable,
+  rowId: number | null | undefined,
+  actor: Actor | { id?: number } | null | undefined
+): AuthzFailure | null {
+  const resolved = resolveActor(db, actor)
+  if (!resolved) {
+    return {
+      success: false,
+      error: 'Could not identify the acting user. Sign out and back in, then try again.'
+    }
+  }
+  if (resolved.role === 'super_admin') return null
+  if (!rowId) return { success: false, error: 'Item not found.' }
+
+  const column = CONTRACT_CHILD_TABLES[table]
+  const row = db.prepare(`SELECT ${column} AS contract_id FROM ${table} WHERE id = ?`).get(rowId) as
+    | { contract_id: number | null }
+    | undefined
+  if (!row) return { success: false, error: 'Item not found.' }
+
+  const failure = requireContractAccess(db, row.contract_id, actor)
+  return failure ? { success: false, error: 'Item not found.' } : null
+}
+
+/**
  * Whether an actor may act on a contract in a given scope. Super admins see
  * everything; directors are limited to their assigned departments and
  * branches; store managers to their branches.

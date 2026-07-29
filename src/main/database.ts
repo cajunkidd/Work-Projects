@@ -5,6 +5,7 @@ import fs from 'fs'
 
 let db: Database.Database
 let dbDirectory: string
+let dbFilePath: string
 
 export function getDb(): Database.Database {
   return db
@@ -28,6 +29,7 @@ export function initDatabase(customPath?: string): void {
     fs.mkdirSync(dbDir, { recursive: true })
   }
   dbDirectory = dbDir
+  dbFilePath = dbPath
 
   db = new Database(dbPath)
   db.pragma('journal_mode = WAL')
@@ -984,6 +986,36 @@ function runV10Migration(): void {
     return
   }
 
+  // This rewrites table schemas on what may be a shared network database, so
+  // leave a complete copy behind first. VACUUM INTO produces a consistent
+  // single-file snapshot without needing the WAL sidecar, and it can't run
+  // inside a transaction — hence before the repair rather than during it.
+  let backupPath: string | null = null
+  if (dbFilePath) {
+    try {
+      const stamp = (db.prepare("SELECT strftime('%Y%m%d-%H%M%S','now') AS t").get() as { t: string }).t
+      const candidate = `${dbFilePath}.pre-v10-${stamp}.bak`
+      if (!fs.existsSync(candidate)) {
+        db.prepare('VACUUM INTO ?').run(candidate)
+        backupPath = candidate
+        console.log(`[migration v10] backed up to ${candidate}`)
+      }
+    } catch (err) {
+      // A backup that can't be written shouldn't be fatal — the repair itself
+      // is transactional and verified below — but say so loudly.
+      console.warn('[migration v10] could not write a backup:', err)
+    }
+  }
+
+  // Row counts before, so the copy step can be checked rather than assumed.
+  const countsBefore = new Map<string, number>()
+  for (const t of broken) {
+    countsBefore.set(
+      t.name,
+      (db.prepare(`SELECT COUNT(*) AS n FROM "${t.name}"`).get() as { n: number }).n
+    )
+  }
+
   // Foreign keys must be off: the temporary rename below would otherwise be
   // policed against the very constraints being repaired. legacy_alter_table
   // keeps the rename from rewriting anything else on the way through.
@@ -1008,13 +1040,42 @@ function runV10Migration(): void {
         db.exec(`INSERT INTO "${t.name}" SELECT * FROM "${tmp}"`)
         db.exec(`DROP TABLE "${tmp}"`)
         for (const a of attached) db.exec(a.sql)
+
+        const after = (db.prepare(`SELECT COUNT(*) AS n FROM "${t.name}"`).get() as { n: number }).n
+        if (after !== countsBefore.get(t.name)) {
+          // Throwing rolls the whole repair back — better an unrepaired
+          // database than one missing rows.
+          throw new Error(
+            `${t.name}: ${countsBefore.get(t.name)} rows before, ${after} after — repair aborted`
+          )
+        }
+      }
+
+      const integrity = db.pragma('integrity_check') as { integrity_check: string }[]
+      if (integrity[0]?.integrity_check !== 'ok') {
+        throw new Error(`integrity_check failed: ${JSON.stringify(integrity)}`)
       }
     })()
-  } finally {
+  } catch (err) {
     db.pragma('legacy_alter_table = OFF')
     db.pragma('foreign_keys = ON')
+    console.error('[migration v10] repair rolled back:', err)
+    if (backupPath) console.error(`[migration v10] the database is unchanged; backup at ${backupPath}`)
+    // Leave user_version below 10 so the repair is retried next launch rather
+    // than being silently marked done.
+    throw err
   }
 
+  db.pragma('legacy_alter_table = OFF')
+  db.pragma('foreign_keys = ON')
+
+  // Foreign keys are enforced again, so this is the real test of the repair.
+  const violations = db.pragma('foreign_key_check') as unknown[]
+  if (violations.length > 0) {
+    console.warn('[migration v10] foreign_key_check reports rows that violate a constraint:', violations)
+  }
+
+  console.log(`[migration v10] repaired ${broken.length} table(s): ${broken.map((t) => t.name).join(', ')}`)
   db.pragma('user_version = 10')
 }
 

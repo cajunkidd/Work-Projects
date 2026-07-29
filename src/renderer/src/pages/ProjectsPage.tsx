@@ -46,19 +46,19 @@ export default function ProjectsPage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    await window.api.projects.create({ ...form, contract_id: parseInt(form.contract_id) } as any)
+    await window.api.projects.create({ ...form, contract_id: parseInt(form.contract_id), actor } as any)
     setShowModal(false)
     setForm((f) => ({ ...f, name: '', start_date: '', end_date: '', description: '' }))
     load()
   }
 
   const handleStatusChange = async (id: number, status: ProjectStatus) => {
-    await window.api.projects.update({ id, status })
+    await window.api.projects.update({ id, status, actor })
     load()
   }
 
   const handleDelete = async (id: number) => {
-    await window.api.projects.delete(id)
+    await window.api.projects.delete({ id, actor })
     setProjects((prev) => prev.filter((p) => p.id !== id))
   }
 

@@ -2,7 +2,12 @@ import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { recordAudit, recordFieldChanges } from '../audit'
 import { dispatchWebhook } from '../webhooks'
-import { resolveActor, contractScopeClause } from '../authz'
+import {
+  resolveActor,
+  contractScopeClause,
+  requireContractAccess,
+  requireRowContractAccess
+} from '../authz'
 import type {
   Actor,
   IpcResponse,
@@ -130,6 +135,8 @@ export function registerObligationHandlers(): void {
     ): Promise<IpcResponse<Obligation>> => {
       try {
         const db = getDb()
+        const gate = requireContractAccess(db, payload.contract_id, payload.actor)
+        if (gate) return gate
         if (!payload.title?.trim()) {
           return { success: false, error: 'An obligation needs a title.' }
         }
@@ -192,6 +199,8 @@ export function registerObligationHandlers(): void {
     ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireRowContractAccess(db, 'obligations', payload.id, payload.actor)
+        if (gate) return { success: false, error: 'Obligation not found' }
         const before = db.prepare('SELECT * FROM obligations WHERE id = ?').get(payload.id) as
           | Obligation
           | undefined
@@ -236,6 +245,8 @@ export function registerObligationHandlers(): void {
     ): Promise<IpcResponse<{ next_id: number | null; next_due: string | null }>> => {
       try {
         const db = getDb()
+        const gate = requireRowContractAccess(db, 'obligations', payload.id, payload.actor)
+        if (gate) return { success: false, error: 'Obligation not found' }
         const obligation = db
           .prepare('SELECT * FROM obligations WHERE id = ?')
           .get(payload.id) as Obligation | undefined
@@ -321,6 +332,8 @@ export function registerObligationHandlers(): void {
     async (_e, payload: { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireRowContractAccess(db, 'obligations', payload.id, payload.actor)
+        if (gate) return { success: false, error: 'Obligation not found' }
         const obligation = db
           .prepare('SELECT contract_id, title FROM obligations WHERE id = ?')
           .get(payload.id) as { contract_id: number; title: string } | undefined

@@ -233,13 +233,13 @@ export default function DocumentsTab({ contract, onContractChanged }: Props) {
                   )}
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => window.api.documents.open(doc.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => window.api.documents.open({ id: doc.id, actor })}>
                     Open
                   </Button>
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => window.api.documents.saveAs(doc.id)}
+                    onClick={() => window.api.documents.saveAs({ id: doc.id, actor })}
                   >
                     Save As
                   </Button>

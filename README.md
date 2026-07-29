@@ -97,6 +97,22 @@ To connect Gmail:
 
 ---
 
+## Upgrading an Existing Database
+
+On first launch, the app repairs a schema fault left by an earlier version:
+table rebuilds in the original migrations left `invoices`, `contract_line_items`,
+`vendor_notes`, `vendor_projects`, `competitor_offerings`, and `renewal_history`
+with foreign keys pointing at a table that had been dropped, which made those
+tables unwritable.
+
+The repair is transactional and verified — row counts are compared before and
+after and the whole thing rolls back if anything doesn't match — and it writes a
+complete snapshot beside the database first, named
+`contract-manager.db.pre-v10-<timestamp>.bak`. Keep that file until you've
+confirmed the upgrade looks right; delete it afterwards.
+
+---
+
 ## Shared Network Database
 
 To share the database with your team:

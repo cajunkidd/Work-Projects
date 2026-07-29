@@ -49,7 +49,7 @@ export default function InvoicesPage() {
   // on screen and flip its state instead — otherwise it vanishes from the very
   // view meant to let you undo it.
   const handleDelete = async (id: number) => {
-    await window.api.invoices.delete(id)
+    await window.api.invoices.delete({ id, actor })
     if (showRemoved) {
       setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, is_deleted: 1 } : i)))
     } else {
@@ -58,7 +58,7 @@ export default function InvoicesPage() {
   }
 
   const handleRestore = async (id: number) => {
-    const res = await window.api.invoices.restore(id)
+    const res = await window.api.invoices.restore({ id, actor })
     if (res.success) {
       setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, is_deleted: 0 } : i)))
     }

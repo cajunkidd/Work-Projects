@@ -1,7 +1,7 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { recordAudit } from '../audit'
-import { requireContractAccess } from '../authz'
+import { requireContractAccess, requireRowContractAccess } from '../authz'
 import type { Actor, IpcResponse, VendorNote } from '../../shared/types'
 
 export function registerNoteHandlers(): void {
@@ -30,6 +30,8 @@ export function registerNoteHandlers(): void {
     ): Promise<IpcResponse<VendorNote>> => {
       try {
         const db = getDb()
+        const gate = requireContractAccess(db, payload.contract_id, payload.actor)
+        if (gate) return gate
         const result = db
           .prepare(
             'INSERT INTO vendor_notes (contract_id, note, created_by, created_by_user_id) VALUES (?,?,?,?)'
@@ -65,8 +67,13 @@ export function registerNoteHandlers(): void {
     }
   )
 
-  ipcMain.handle('notes:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle('notes:delete', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const gate = requireRowContractAccess(
+        getDb(), 'vendor_notes', id, typeof arg === 'number' ? undefined : arg.actor
+      )
+      if (gate) return gate
       getDb().prepare('DELETE FROM vendor_notes WHERE id = ?').run(id)
       return { success: true }
     } catch (err: any) {

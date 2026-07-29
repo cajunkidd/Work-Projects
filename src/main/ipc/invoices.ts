@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import { resolveActor, contractScopeClause } from '../authz'
+import { resolveActor, contractScopeClause, requireRowContractAccess } from '../authz'
 import type { Actor, IpcResponse, Invoice } from '../../shared/types'
 
 export function registerInvoiceHandlers(): void {
@@ -43,8 +43,13 @@ export function registerInvoiceHandlers(): void {
     }
   )
 
-  ipcMain.handle('invoices:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle('invoices:delete', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const gate = requireRowContractAccess(
+        getDb(), 'invoices', id, typeof arg === 'number' ? undefined : arg.actor
+      )
+      if (gate) return gate
       getDb()
         .prepare(`UPDATE invoices SET is_deleted = 1, deleted_at = datetime('now') WHERE id = ?`)
         .run(id)
@@ -55,8 +60,13 @@ export function registerInvoiceHandlers(): void {
   })
 
   /** Undoes a soft delete. */
-  ipcMain.handle('invoices:restore', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle('invoices:restore', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const gate = requireRowContractAccess(
+        getDb(), 'invoices', id, typeof arg === 'number' ? undefined : arg.actor
+      )
+      if (gate) return gate
       const info = getDb()
         .prepare('UPDATE invoices SET is_deleted = 0, deleted_at = NULL WHERE id = ? AND is_deleted = 1')
         .run(id)

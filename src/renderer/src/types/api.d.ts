@@ -92,8 +92,8 @@ declare global {
       }
       lineItems: {
         list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<ContractLineItem[]>>
-        upsert: (items: ContractLineItem[]) => Promise<IpcResponse<void>>
-        delete: (id: number) => Promise<IpcResponse<void>>
+        upsert: (items: ContractLineItem[], actor?: any) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
       }
       renewals: {
         list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<RenewalHistory[]>>
@@ -101,26 +101,26 @@ declare global {
       }
       invoices: {
         list: (opts?: any) => Promise<IpcResponse<Invoice[]>>
-        delete: (id: number) => Promise<IpcResponse<void>>
-        restore: (id: number) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
+        restore: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
         insert: (payload: any) => Promise<IpcResponse<Invoice>>
       }
       competitors: {
         list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<CompetitorOffering[]>>
         create: (payload: any) => Promise<IpcResponse<CompetitorOffering>>
-        delete: (id: number) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
         pickFile: () => Promise<IpcResponse<string>>
       }
       projects: {
         list: (opts?: any) => Promise<IpcResponse<VendorProject[]>>
         create: (payload: any) => Promise<IpcResponse<VendorProject>>
         update: (payload: any) => Promise<IpcResponse<void>>
-        delete: (id: number) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
       }
       notes: {
         list: (arg: number | { contract_id: number; actor?: any }) => Promise<IpcResponse<VendorNote[]>>
         create: (payload: any) => Promise<IpcResponse<VendorNote>>
-        delete: (id: number) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
       }
       settings: {
         get: () => Promise<IpcResponse<AppSettings>>
@@ -241,11 +241,11 @@ declare global {
         get: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<ContractDocument>>
         search: (opts: { query: string; contract_id?: number; doc_type?: DocumentType; limit?: number; actor?: any }) => Promise<IpcResponse<DocumentSearchHit[]>>
         indexStats: () => Promise<IpcResponse<{ total: number; indexed: number; no_text_layer: number; failed: number }>>
-        open: (id: number) => Promise<IpcResponse<void>>
-        saveAs: (id: number) => Promise<IpcResponse<string>>
+        open: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
+        saveAs: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<string>>
         update: (payload: any) => Promise<IpcResponse<void>>
         delete: (payload: { id: number; actor?: any }) => Promise<IpcResponse<void>>
-        reindex: (id: number) => Promise<IpcResponse<{ status: string; characters: number }>>
+        reindex: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<{ status: string; characters: number }>>
       }
       obligations: {
         list: (filter?: ObligationFilter) => Promise<IpcResponse<Obligation[]>>

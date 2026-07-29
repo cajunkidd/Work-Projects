@@ -1,6 +1,11 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import { resolveActor, contractScopeClause } from '../authz'
+import {
+  resolveActor,
+  contractScopeClause,
+  requireContractAccess,
+  requireRowContractAccess
+} from '../authz'
 import type { Actor, IpcResponse, VendorProject } from '../../shared/types'
 
 export function registerProjectHandlers(): void {
@@ -41,9 +46,11 @@ export function registerProjectHandlers(): void {
 
   ipcMain.handle(
     'projects:create',
-    async (_e, payload: Omit<VendorProject, 'id'>): Promise<IpcResponse<VendorProject>> => {
+    async (_e, payload: Omit<VendorProject, 'id'> & { actor?: Actor }): Promise<IpcResponse<VendorProject>> => {
       try {
         const db = getDb()
+        const gate = requireContractAccess(db, payload.contract_id, payload.actor)
+        if (gate) return gate
         const result = db
           .prepare(
             `INSERT INTO vendor_projects (contract_id, name, status, start_date, end_date, description)
@@ -71,11 +78,19 @@ export function registerProjectHandlers(): void {
     'projects:update',
     async (
       _e,
-      payload: Partial<VendorProject> & { id: number }
+      payload: Partial<VendorProject> & { id: number; actor?: Actor }
     ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
-        const fields = Object.keys(payload).filter((k) => k !== 'id')
+        const gate = requireRowContractAccess(db, 'vendor_projects', payload.id, payload.actor)
+        if (gate) return gate
+        // A move must also land on a contract the actor can reach.
+        if (payload.contract_id !== undefined) {
+          const moved = requireContractAccess(db, payload.contract_id, payload.actor)
+          if (moved) return moved
+        }
+        // `actor` is not a column.
+        const fields = Object.keys(payload).filter((k) => k !== 'id' && k !== 'actor')
         const sets = fields.map((f) => `${f} = ?`).join(', ')
         const values = fields.map((f) => (payload as any)[f])
         db.prepare(`UPDATE vendor_projects SET ${sets} WHERE id = ?`).run(...values, payload.id)
@@ -86,8 +101,13 @@ export function registerProjectHandlers(): void {
     }
   )
 
-  ipcMain.handle('projects:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle('projects:delete', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const gate = requireRowContractAccess(
+        getDb(), 'vendor_projects', id, typeof arg === 'number' ? undefined : arg.actor
+      )
+      if (gate) return gate
       getDb().prepare('DELETE FROM vendor_projects WHERE id = ?').run(id)
       return { success: true }
     } catch (err: any) {

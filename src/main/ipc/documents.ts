@@ -4,7 +4,12 @@ import path from 'path'
 import crypto from 'crypto'
 import { getDb, getDbDirectory } from '../database'
 import { recordAudit } from '../audit'
-import { resolveActor, contractScopeClause, requireContractAccess } from '../authz'
+import {
+  resolveActor,
+  contractScopeClause,
+  requireContractAccess,
+  requireRowContractAccess
+} from '../authz'
 import type {
   Actor,
   ContractDocument,
@@ -147,6 +152,11 @@ export function registerDocumentHandlers(): void {
         if (result.canceled || result.filePaths.length === 0) {
           return { success: false, error: 'Cancelled' }
         }
+
+        // A document attached to a contract inherits its scope, so it can only
+        // be filed against one the actor can reach.
+        const attachGate = requireContractAccess(getDb(), payload.contract_id, payload.actor)
+        if (payload.contract_id && attachGate) return attachGate
 
         const sourcePath = result.filePaths[0]
         const buffer = fs.readFileSync(sourcePath)
@@ -366,8 +376,13 @@ export function registerDocumentHandlers(): void {
 
   // ─── File actions ────────────────────────────────────────────────────────
 
-  ipcMain.handle('documents:open', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle('documents:open', async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const gate = requireRowContractAccess(
+        getDb(), 'documents', id, typeof arg === 'number' ? undefined : arg.actor
+      )
+      if (gate) return { success: false, error: 'Document not found' }
       const row = getDb()
         .prepare('SELECT stored_path FROM documents WHERE id = ?')
         .get(id) as { stored_path: string } | undefined
@@ -384,8 +399,13 @@ export function registerDocumentHandlers(): void {
 
   ipcMain.handle(
     'documents:saveAs',
-    async (_e, id: number): Promise<IpcResponse<string>> => {
+    async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<string>> => {
       try {
+        const id = typeof arg === 'number' ? arg : arg.id
+        const gate = requireRowContractAccess(
+          getDb(), 'documents', id, typeof arg === 'number' ? undefined : arg.actor
+        )
+        if (gate) return { success: false, error: 'Document not found' }
         const row = getDb()
           .prepare('SELECT title, stored_path FROM documents WHERE id = ?')
           .get(id) as { title: string; stored_path: string } | undefined
@@ -419,6 +439,13 @@ export function registerDocumentHandlers(): void {
       try {
         const db = getDb()
         const { id, actor, ...rest } = payload
+        const gate = requireRowContractAccess(db, 'documents', id, actor)
+        if (gate) return { success: false, error: 'Document not found' }
+        // Re-filing a document must land on a reachable contract.
+        if (rest.contract_id !== undefined && rest.contract_id !== null) {
+          const moved = requireContractAccess(db, rest.contract_id, actor)
+          if (moved) return moved
+        }
         const fields = Object.keys(rest).filter((k) =>
           ['title', 'doc_type', 'contract_id', 'vendor_id'].includes(k)
         )
@@ -449,6 +476,8 @@ export function registerDocumentHandlers(): void {
     async (_e, payload: { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireRowContractAccess(db, 'documents', payload.id, payload.actor)
+        if (gate) return { success: false, error: 'Document not found' }
         const row = db
           .prepare('SELECT title, stored_path, file_hash FROM documents WHERE id = ?')
           .get(payload.id) as
@@ -489,9 +518,14 @@ export function registerDocumentHandlers(): void {
   /** Re-runs text extraction, e.g. after upgrading the parser. */
   ipcMain.handle(
     'documents:reindex',
-    async (_e, id: number): Promise<IpcResponse<{ status: string; characters: number }>> => {
+    async (_e, arg: number | { id: number; actor?: Actor }): Promise<IpcResponse<{ status: string; characters: number }>> => {
       try {
         const db = getDb()
+        const id = typeof arg === 'number' ? arg : arg.id
+        const gate = requireRowContractAccess(
+          db, 'documents', id, typeof arg === 'number' ? undefined : arg.actor
+        )
+        if (gate) return { success: false, error: 'Document not found' }
         const row = db
           .prepare('SELECT stored_path FROM documents WHERE id = ?')
           .get(id) as { stored_path: string } | undefined

@@ -4,7 +4,7 @@ import path from 'path'
 import { getDb } from '../database'
 import { recordAudit, touchContract } from '../audit'
 import { diffText, diffStats, compareRecords } from '../../shared/diff'
-import { requireContractAccess } from '../authz'
+import { requireContractAccess, requireRowContractAccess } from '../authz'
 import type {
   Actor,
   Contract,
@@ -118,6 +118,8 @@ export function registerVersionHandlers(): void {
     ): Promise<IpcResponse<ContractVersion>> => {
       try {
         const db = getDb()
+        const gate = requireContractAccess(db, payload.contract_id, payload.actor)
+        if (gate) return gate
         const contract = db
           .prepare('SELECT * FROM contracts WHERE id = ?')
           .get(payload.contract_id) as Contract | undefined
@@ -273,6 +275,10 @@ export function registerVersionHandlers(): void {
     ): Promise<IpcResponse<{ restored_fields: string[] }>> => {
       try {
         const db = getDb()
+        // Restoring rewrites the live contract, so it needs contract access,
+        // not just knowledge of a version id.
+        const gate = requireRowContractAccess(db, 'contract_versions', payload.version_id, payload.actor)
+        if (gate) return { success: false, error: 'Version not found' }
         const version = db
           .prepare('SELECT * FROM contract_versions WHERE id = ?')
           .get(payload.version_id) as ContractVersion | undefined
@@ -328,6 +334,8 @@ export function registerVersionHandlers(): void {
     async (_e, payload: { id: number; actor?: Actor }): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireRowContractAccess(db, 'contract_versions', payload.id, payload.actor)
+        if (gate) return { success: false, error: 'Version not found' }
         const version = db
           .prepare('SELECT * FROM contract_versions WHERE id = ?')
           .get(payload.id) as ContractVersion | undefined

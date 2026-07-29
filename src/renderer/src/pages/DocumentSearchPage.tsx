@@ -226,7 +226,7 @@ export default function DocumentSearchPage() {
                   </p>
                 </div>
                 <div className="flex flex-col gap-1 flex-shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => window.api.documents.open(hit.id)}>
+                  <Button variant="ghost" size="sm" onClick={() => window.api.documents.open({ id: hit.id, actor })}>
                     Open
                   </Button>
                   {hit.contract_id && (
