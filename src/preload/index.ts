@@ -8,22 +8,22 @@ contextBridge.exposeInMainWorld('api', {
     list: () => ipcRenderer.invoke('users:list'),
     create: (payload: any) => ipcRenderer.invoke('users:create', payload),
     update: (payload: any) => ipcRenderer.invoke('users:update', payload),
-    delete: (id: number) => ipcRenderer.invoke('users:delete', id),
+    delete: (arg: any) => ipcRenderer.invoke('users:delete', arg),
     hasAdmin: () => ipcRenderer.invoke('users:hasAdmin')
   },
 
   // Departments & Budget
   departments: {
     list: () => ipcRenderer.invoke('departments:list'),
-    create: (name: string) => ipcRenderer.invoke('departments:create', name),
+    create: (arg: any) => ipcRenderer.invoke('departments:create', arg),
     update: (payload: any) => ipcRenderer.invoke('departments:update', payload),
-    delete: (id: number) => ipcRenderer.invoke('departments:delete', id)
+    delete: (arg: any) => ipcRenderer.invoke('departments:delete', arg)
   },
   branches: {
     list: () => ipcRenderer.invoke('branches:list'),
     create: (payload: any) => ipcRenderer.invoke('branches:create', payload),
     update: (payload: any) => ipcRenderer.invoke('branches:update', payload),
-    delete: (id: number) => ipcRenderer.invoke('branches:delete', id)
+    delete: (arg: any) => ipcRenderer.invoke('branches:delete', arg)
   },
   budget: {
     list: () => ipcRenderer.invoke('budget:list'),
@@ -31,7 +31,7 @@ contextBridge.exposeInMainWorld('api', {
     summaries: (fiscal_year: number, filter?: any) => ipcRenderer.invoke('budget:summaries', fiscal_year, filter),
     monthlyList: (opts: any) => ipcRenderer.invoke('monthlyBudget:list', opts),
     monthlyUpsert: (payload: any) => ipcRenderer.invoke('monthlyBudget:upsert', payload),
-    monthlyBulkUpsert: (entries: any[]) => ipcRenderer.invoke('monthlyBudget:bulkUpsert', entries),
+    monthlyBulkUpsert: (entries: any[], actor?: any) => ipcRenderer.invoke('monthlyBudget:bulkUpsert', entries, actor),
     monthlySummary: (opts: any) => ipcRenderer.invoke('monthlyBudget:summary', opts)
   },
 
@@ -94,6 +94,14 @@ contextBridge.exposeInMainWorld('api', {
     pickDbFolder: () => ipcRenderer.invoke('settings:pickDbFolder'),
     extractColors: (imagePath: string) => ipcRenderer.invoke('settings:extractColors', imagePath),
     testEmail: (toEmail: string) => ipcRenderer.invoke('settings:testEmail', toEmail)
+  },
+
+  // Credential encryption
+  secrets: {
+    status: () => ipcRenderer.invoke('secrets:status'),
+    setPassphrase: (payload: any) => ipcRenderer.invoke('secrets:setPassphrase', payload),
+    unlock: (payload: any) => ipcRenderer.invoke('secrets:unlock', payload),
+    lock: (payload?: any) => ipcRenderer.invoke('secrets:lock', payload)
   },
 
   // Gmail

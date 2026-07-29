@@ -33,8 +33,13 @@ A step-by-step walkthrough of every feature in Contract Manager, written for the
 23. [Version Control & Redlining](#23-version-control--redlining)
 24. [Audit Trail](#24-audit-trail)
 25. [Clause Library](#25-clause-library)
-26. [Signing Out](#26-signing-out)
-27. [Troubleshooting & FAQ](#27-troubleshooting--faq)
+26. [Vendors](#26-vendors)
+27. [Obligations](#27-obligations)
+28. [Document Search & AI Extraction](#28-document-search--ai-extraction)
+29. [Calendar Feed & Webhooks](#29-calendar-feed--webhooks)
+30. [Credential Encryption](#30-credential-encryption)
+31. [Signing Out](#31-signing-out)
+32. [Troubleshooting & FAQ](#32-troubleshooting--faq)
 
 ---
 
@@ -689,13 +694,105 @@ Directors and Super Admins can add, edit, and archive clauses; **+ Fallback** on
 
 ---
 
-## 26. Signing Out
+## 26. Vendors
+
+**Vendors** in the sidebar lists one record per supplier, with its contracts, documents, and contacts attached.
+
+Each row shows active contract count, committed annual spend, and next renewal. Click through for the full record: details, contacts (mark one primary), every contract, and every uploaded document.
+
+### Duplicates
+
+Vendor names are matched on a normalised form, so "Acme, Inc." and "Acme Inc" are treated as the same supplier. Creating or renaming into an existing name is refused. Any duplicates that predate this — from older data — appear in the **Possible Duplicates** card; merging moves the other record's contracts, documents, and contacts onto the one you keep.
+
+**What you just showed off:** "all contracts with Acme" that no longer depends on everyone typing the name the same way.
+
+---
+
+## 27. Obligations
+
+**Obligations** in the sidebar tracks what each contract actually commits either side to: deliverables, milestones, SLAs, payments, and compliance duties.
+
+Add them from a contract's **Obligations** tab with an owner, a due date, and optionally a recurrence. Marking a repeating obligation complete immediately creates its next occurrence, so a quarterly report schedule keeps rolling without anyone re-entering it.
+
+Overdue is worked out from the due date whenever you look, so the list is never stale. The daily sweep sends one digest covering everything overdue or due within 14 days.
+
+**What you just showed off:** the contract's promises tracked as work, not buried in a PDF.
+
+---
+
+## 28. Document Search & AI Extraction
+
+### Uploading
+
+Upload from a contract's **Documents** tab or from the **Documents** page. The file is copied into a managed vault beside the database — moving or renaming the original no longer breaks the link — and its text is indexed.
+
+### Searching
+
+**Documents** in the sidebar searches *inside* every uploaded document. Search for "auto-renew" or "limitation of liability" and you get the documents containing that language with the matching passage highlighted, not just filename matches.
+
+The header shows how many documents are indexed. Scanned PDFs have no text layer and can't be indexed — they're counted separately, and AI extraction can still read them.
+
+### AI extraction
+
+With an API key configured (§ AI Extraction Setup in the README), **Extract Terms** on any document reads it and returns dates, values, renewal terms, contacts, obligations, and risk flags — each with a confidence level and the exact quote it relied on. Scanned PDFs are read from the page images, so this doubles as OCR.
+
+**Nothing is written to the contract until you apply it.** Review each value against its evidence and tick what to accept; low-confidence values start unticked. Extracted obligations can be created in the same step.
+
+**What you just showed off:** a 40-page agreement turned into structured, checkable data in about a minute.
+
+---
+
+## 29. Calendar Feed & Webhooks
+
+### Calendar
+
+**Settings → Calendar Feed** writes an `.ics` file of renewals, cancellation deadlines, and obligation due dates. Save it to a shared network path and subscribe from Outlook, Google Calendar, or Apple Calendar — the daily sweep rewrites it, so the calendar stays current without anyone re-exporting.
+
+### Webhooks
+
+**Settings → Webhooks** POSTs a JSON payload to a URL when something happens — contract created, approved, rejected, renewal approaching, obligation due, and more. Point one at Zapier, Power Automate, a Salesforce flow, or an internal endpoint.
+
+Each request carries an `X-CM-Signature` header (HMAC-SHA256 of the body, keyed with the webhook's secret). Verify it on the receiving end before trusting a payload. **Test** sends a sample delivery so you can confirm the receiver works.
+
+**What you just showed off:** contract events driving other systems without anyone re-keying data.
+
+---
+
+## 30. Credential Encryption
+
+**Settings → Credential Encryption** (Super Admin) seals the SMTP password, Gmail token, Documenso key, and Anthropic key with AES-256-GCM.
+
+Set a passphrase once and every stored credential is re-encrypted immediately. On each other workstation, enter the same passphrase once — it's kept in that machine's OS keystore, so it isn't asked for again.
+
+The passphrase is never stored in the database, so copying the database file off the shared drive yields ciphertext rather than credentials.
+
+> **There is no recovery.** If the passphrase is lost, the credentials can't be decrypted and must be re-entered. Changing it re-encrypts everything, so the old passphrase stops working everywhere at once and each workstation is prompted for the new one.
+
+While a machine is locked, email sending, Gmail sync, e-signature, and AI extraction are skipped rather than attempted with unreadable credentials. Everything else keeps working.
+
+**What you just showed off:** shared credentials that survive a copied database file.
+
+---
+
+## 31. Signing Out
 
 At the bottom of the sidebar, under your name and role, click **Sign out**. You're returned to the login screen immediately. No background session remains.
 
 ---
 
-## 27. Troubleshooting & FAQ
+## 32. Troubleshooting & FAQ
+
+**"An action says it requires the super admin role, but I'm signed in as one."**
+Permission is checked against the role stored in the database, not the one the app is showing. If your role was changed while you were signed in, sign out and back in.
+
+**"Email, Gmail sync, or AI extraction stopped working after we turned on credential encryption."**
+That machine is locked. Go to **Settings → Credential Encryption** and enter the passphrase — it's needed once per workstation.
+
+**"Search doesn't find text I can see in the PDF."**
+That PDF is a scan with no text layer, so there's nothing to index. The Documents page counts these separately. Use **Extract Terms** on it — AI extraction reads the page images directly.
+
+**"AI extraction returned a value I know is wrong."**
+Check the evidence quote shown under each value. Extraction never writes to a contract on its own — untick anything you don't accept before applying.
 
 **"I don't see the Assets page in the sidebar."**
 Assets is Super Admin only. Ask a Super Admin to upgrade your role, or have them manage assets for you.

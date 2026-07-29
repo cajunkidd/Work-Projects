@@ -2,6 +2,7 @@ import { ipcMain, dialog, app, BrowserWindow } from 'electron'
 import fs from 'fs'
 import path from 'path'
 import { getDb } from '../database'
+import { decryptFromStorage } from '../crypto/secrets'
 import type { IpcResponse, ContractTemplate, SigningRequest } from '../../shared/types'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -16,7 +17,7 @@ function getSetting(key: string): string {
 
 function getDocumensoConfig(): { url: string; apiKey: string } | null {
   const url = getSetting('documenso_url').replace(/\/$/, '')
-  const apiKey = getSetting('documenso_api_key')
+  const apiKey = decryptFromStorage(getSetting('documenso_api_key'))
   if (!url || !apiKey) return null
   return { url, apiKey }
 }

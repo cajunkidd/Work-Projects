@@ -2,6 +2,7 @@ import { ipcMain } from 'electron'
 import { getDb, normalizeVendorName } from '../database'
 import { recordAudit, recordFieldChanges } from '../audit'
 import { dispatchWebhook } from '../webhooks'
+import { requireRole, denied } from '../authz'
 import type { Actor, IpcResponse, Vendor, VendorContact } from '../../shared/types'
 
 /**
@@ -269,6 +270,8 @@ export function registerVendorHandlers(): void {
     ): Promise<IpcResponse<{ contracts_moved: number }>> => {
       try {
         const db = getDb()
+        const gate = requireRole(db, payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         if (payload.keep_id === payload.merge_id) {
           return { success: false, error: 'Pick two different vendors to merge.' }
         }

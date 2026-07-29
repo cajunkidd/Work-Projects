@@ -1,4 +1,5 @@
 import type { Database } from 'better-sqlite3'
+import { decryptFromStorage } from './crypto/secrets'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -38,7 +39,10 @@ function getSmtpSettings(db: Database): SmtpSettings | null {
     port: parseInt(s.smtp_port || '587'),
     secure: s.smtp_secure === 'true',
     user: s.smtp_user || '',
-    pass: s.smtp_pass || '',
+    // Stored encrypted once a passphrase is set; null means this session is
+    // locked, in which case sending is skipped rather than attempted with
+    // ciphertext as the password.
+    pass: decryptFromStorage(s.smtp_pass) ?? '',
     from: s.smtp_from || s.smtp_user || ''
   }
 }

@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
+import { requireRole, denied } from '../authz'
 import { notifyBudgetUpdated } from '../emailNotifier'
 import type {
   IpcResponse,
@@ -25,9 +26,16 @@ export function registerBudgetHandlers(): void {
 
   ipcMain.handle(
     'departments:create',
-    async (_e, name: string): Promise<IpcResponse<Department>> => {
+    async (
+      _e,
+      arg: string | { name: string; actor?: { id: number } }
+    ): Promise<IpcResponse<Department>> => {
       try {
         const db = getDb()
+        const name = typeof arg === 'string' ? arg : arg.name
+        const actor = typeof arg === 'string' ? undefined : arg.actor
+        const gate = requireRole(db, actor, 'super_admin')
+        if (denied(gate)) return gate
         const result = db.prepare('INSERT INTO departments (name) VALUES (?)').run(name)
         const row = db
           .prepare('SELECT * FROM departments WHERE id = ?')
@@ -41,8 +49,13 @@ export function registerBudgetHandlers(): void {
 
   ipcMain.handle(
     'departments:update',
-    async (_e, payload: { id: number; name: string }): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      payload: { id: number; name: string; actor?: { id: number } }
+    ): Promise<IpcResponse<void>> => {
       try {
+        const gate = requireRole(getDb(), payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         getDb().prepare('UPDATE departments SET name = ? WHERE id = ?').run(payload.name, payload.id)
         return { success: true }
       } catch (err: any) {
@@ -51,8 +64,14 @@ export function registerBudgetHandlers(): void {
     }
   )
 
-  ipcMain.handle('departments:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle(
+    'departments:delete',
+    async (_e, arg: number | { id: number; actor?: { id: number } }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const actor = typeof arg === 'number' ? undefined : arg.actor
+      const gate = requireRole(getDb(), actor, 'super_admin')
+      if (denied(gate)) return gate
       getDb().prepare('DELETE FROM departments WHERE id = ?').run(id)
       return { success: true }
     } catch (err: any) {
@@ -72,9 +91,14 @@ export function registerBudgetHandlers(): void {
 
   ipcMain.handle(
     'branches:create',
-    async (_e, payload: { number: number; name: string }): Promise<IpcResponse<Branch>> => {
+    async (
+      _e,
+      payload: { number: number; name: string; actor?: { id: number } }
+    ): Promise<IpcResponse<Branch>> => {
       try {
         const db = getDb()
+        const gate = requireRole(db, payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         const result = db.prepare('INSERT INTO branches (number, name) VALUES (?, ?)').run(payload.number, payload.name)
         const row = db.prepare('SELECT * FROM branches WHERE id = ?').get(result.lastInsertRowid) as Branch
         return { success: true, data: row }
@@ -86,9 +110,14 @@ export function registerBudgetHandlers(): void {
 
   ipcMain.handle(
     'branches:update',
-    async (_e, payload: { id: number; number?: number; name?: string }): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      payload: { id: number; number?: number; name?: string; actor?: { id: number } }
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireRole(db, payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         if (payload.number !== undefined)
           db.prepare('UPDATE branches SET number = ? WHERE id = ?').run(payload.number, payload.id)
         if (payload.name !== undefined)
@@ -100,8 +129,14 @@ export function registerBudgetHandlers(): void {
     }
   )
 
-  ipcMain.handle('branches:delete', async (_e, id: number): Promise<IpcResponse<void>> => {
+  ipcMain.handle(
+    'branches:delete',
+    async (_e, arg: number | { id: number; actor?: { id: number } }): Promise<IpcResponse<void>> => {
     try {
+      const id = typeof arg === 'number' ? arg : arg.id
+      const actor = typeof arg === 'number' ? undefined : arg.actor
+      const gate = requireRole(getDb(), actor, 'super_admin')
+      if (denied(gate)) return gate
       getDb().prepare('DELETE FROM branches WHERE id = ?').run(id)
       return { success: true }
     } catch (err: any) {
@@ -131,9 +166,17 @@ export function registerBudgetHandlers(): void {
     'budget:upsert',
     async (
       _e,
-      payload: { department_id: number | null; branch_id: number | null; fiscal_year: number; total_amount: number }
+      payload: {
+        department_id: number | null
+        branch_id: number | null
+        fiscal_year: number
+        total_amount: number
+        actor?: { id: number }
+      }
     ): Promise<IpcResponse<void>> => {
       try {
+        const gate = requireRole(getDb(), payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         getDb()
           .prepare(
             `INSERT INTO budget (department_id, branch_id, fiscal_year, total_amount)
@@ -395,8 +438,13 @@ export function registerBudgetHandlers(): void {
 
   ipcMain.handle(
     'monthlyBudget:upsert',
-    async (_e, payload: MonthlyBudget): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      payload: MonthlyBudget & { actor?: { id: number } }
+    ): Promise<IpcResponse<void>> => {
       try {
+        const gate = requireRole(getDb(), payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         getDb().transaction(() => upsertMonthly(payload))()
         return { success: true }
       } catch (err: any) {
@@ -407,9 +455,15 @@ export function registerBudgetHandlers(): void {
 
   ipcMain.handle(
     'monthlyBudget:bulkUpsert',
-    async (_e, entries: MonthlyBudget[]): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      entries: MonthlyBudget[],
+      actor?: { id: number }
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireRole(db, actor, 'super_admin')
+        if (denied(gate)) return gate
         db.transaction((rows: MonthlyBudget[]) => {
           for (const r of rows) upsertMonthly(r)
         })(entries)

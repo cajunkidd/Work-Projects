@@ -2,7 +2,21 @@ import { ipcMain, dialog } from 'electron'
 import path from 'path'
 import { getDb, switchDatabase } from '../database'
 import { sendTestEmail } from '../emailNotifier'
-import type { IpcResponse, AppSettings } from '../../shared/types'
+import { requireRole, denied } from '../authz'
+import {
+  encryptForStorage,
+  isSecretKey,
+  isEncrypted,
+  secretStatus,
+  setPassphrase,
+  unlock,
+  lock,
+  clearCachedPassphrase
+} from '../crypto/secrets'
+import type { Actor, IpcResponse, AppSettings } from '../../shared/types'
+
+/** Never returned to the renderer — the UI shows presence, not the value. */
+const REDACTED = '••••••••'
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle('settings:get', async (): Promise<IpcResponse<AppSettings>> => {
@@ -13,6 +27,12 @@ export function registerSettingsHandlers(): void {
       }[]
       const settings: AppSettings = {}
       for (const row of rows) {
+        // Credentials never leave the main process. The renderer only needs to
+        // know whether one is set, so it gets a placeholder.
+        if (isSecretKey(row.key)) {
+          ;(settings as any)[row.key] = row.value ? REDACTED : ''
+          continue
+        }
         ;(settings as any)[row.key] = row.value
       }
       return { success: true, data: settings }
@@ -23,15 +43,28 @@ export function registerSettingsHandlers(): void {
 
   ipcMain.handle(
     'settings:set',
-    async (_e, payload: Partial<AppSettings>): Promise<IpcResponse<void>> => {
+    async (
+      _e,
+      payload: Partial<AppSettings> & { actor?: Actor }
+    ): Promise<IpcResponse<void>> => {
       try {
         const db = getDb()
+        const gate = requireRole(db, payload.actor, 'super_admin')
+        if (denied(gate)) return gate
+
         const stmt = db.prepare(
           'INSERT INTO app_settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
         )
         const tx = db.transaction((obj: Partial<AppSettings>) => {
           for (const [key, value] of Object.entries(obj)) {
-            if (value !== undefined) stmt.run(key, value)
+            if (value === undefined || key === 'actor') continue
+            // The redaction placeholder means "unchanged" — never store it.
+            if (isSecretKey(key) && value === REDACTED) continue
+            const stored =
+              isSecretKey(key) && typeof value === 'string'
+                ? encryptForStorage(db, value)
+                : (value as string)
+            stmt.run(key, stored)
           }
         })
         tx(payload)
@@ -235,6 +268,61 @@ export function registerSettingsHandlers(): void {
         `
         const rows = db.prepare(query).all(...params) as { month: string; amount: number }[]
         return { success: true, data: rows }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  // ─── Credential encryption ───────────────────────────────────────────────
+
+  ipcMain.handle('secrets:status', async (): Promise<IpcResponse<ReturnType<typeof secretStatus>>> => {
+    try {
+      return { success: true, data: secretStatus(getDb()) }
+    } catch (err: any) {
+      return { success: false, error: err.message }
+    }
+  })
+
+  ipcMain.handle(
+    'secrets:setPassphrase',
+    async (
+      _e,
+      payload: { passphrase: string; current?: string; actor?: Actor }
+    ): Promise<IpcResponse<{ resealed: number }>> => {
+      try {
+        const db = getDb()
+        const gate = requireRole(db, payload.actor, 'super_admin')
+        if (denied(gate)) return gate
+
+        const result = setPassphrase(db, payload.passphrase, payload.current)
+        if (!result.ok) return { success: false, error: result.error }
+        return { success: true, data: { resealed: result.resealed ?? 0 } }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'secrets:unlock',
+    async (_e, payload: { passphrase: string }): Promise<IpcResponse<void>> => {
+      try {
+        const result = unlock(getDb(), payload.passphrase)
+        return result.ok ? { success: true } : { success: false, error: result.error }
+      } catch (err: any) {
+        return { success: false, error: err.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'secrets:lock',
+    async (_e, payload?: { forget?: boolean }): Promise<IpcResponse<void>> => {
+      try {
+        lock()
+        if (payload?.forget) clearCachedPassphrase()
+        return { success: true }
       } catch (err: any) {
         return { success: false, error: err.message }
       }

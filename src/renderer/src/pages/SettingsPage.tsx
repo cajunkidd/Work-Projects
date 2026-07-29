@@ -11,6 +11,8 @@ import Badge from '../components/ui/Badge'
 import MonthlyBudgetSection from '../components/budget/MonthlyBudgetSection'
 import ApprovalRulesSection from '../components/settings/ApprovalRulesSection'
 import IntegrationsSection from '../components/settings/IntegrationsSection'
+import SecuritySection from '../components/settings/SecuritySection'
+import { currentActor } from '../lib/actor'
 import type { Department, Branch, User } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -120,7 +122,7 @@ export default function SettingsPage() {
     if (res.success && res.data) {
       const path = res.data
       setLogo(path)
-      await window.api.settings.set({ logo_path: path })
+      await window.api.settings.set({ logo_path: path, actor: currentActor() } as any)
 
       const colorRes = await window.api.settings.extractColors(path)
       if (colorRes.success && colorRes.data) {
@@ -129,6 +131,7 @@ export default function SettingsPage() {
         const dark = palette[0] || primary
         setTheme({ primary, secondary, accent: palette[2] || primary, light, dark })
         await window.api.settings.set({
+          actor: currentActor(),
           brand_primary: primary,
           brand_secondary: secondary,
           brand_accent: palette[2] || primary,
@@ -144,7 +147,7 @@ export default function SettingsPage() {
   }
 
   const handleColorSave = async () => {
-    await window.api.settings.set({ brand_primary: brandPrimary })
+    await window.api.settings.set({ brand_primary: brandPrimary, actor: currentActor() } as any)
     setTheme({ primary: brandPrimary })
   }
 
@@ -153,14 +156,14 @@ export default function SettingsPage() {
     e.preventDefault()
     if (!newDeptName.trim()) return
     setDeptSaving(true)
-    await window.api.departments.create(newDeptName.trim())
+    await window.api.departments.create({ name: newDeptName.trim(), actor: currentActor() } as any)
     setNewDeptName('')
     setDeptSaving(false)
     load()
   }
 
   const handleDeleteDept = async (id: number) => {
-    await window.api.departments.delete(id)
+    await window.api.departments.delete({ id, actor: currentActor() } as any)
     setDepartments((prev) => prev.filter((d) => d.id !== id))
   }
 
@@ -169,7 +172,7 @@ export default function SettingsPage() {
     e.preventDefault()
     if (!newBranchName.trim() || !newBranchNumber.trim()) return
     setBranchSaving(true)
-    await window.api.branches.create({ number: parseInt(newBranchNumber), name: newBranchName.trim() })
+    await window.api.branches.create({ number: parseInt(newBranchNumber), name: newBranchName.trim(), actor: currentActor() } as any)
     setNewBranchNumber('')
     setNewBranchName('')
     setBranchSaving(false)
@@ -177,7 +180,7 @@ export default function SettingsPage() {
   }
 
   const handleDeleteBranch = async (id: number) => {
-    await window.api.branches.delete(id)
+    await window.api.branches.delete({ id, actor: currentActor() } as any)
     setBranches((prev) => prev.filter((b) => b.id !== id))
   }
 
@@ -215,6 +218,7 @@ export default function SettingsPage() {
     e.preventDefault()
     setBudgetSaving(true)
     await window.api.budget.upsert({
+      actor: currentActor(),
       department_id: budgetScope === 'department' && budgetDeptId ? parseInt(budgetDeptId) : null,
       branch_id: budgetScope === 'branch' && budgetBranchId ? parseInt(budgetBranchId) : null,
       fiscal_year: parseInt(budgetYear),
@@ -230,14 +234,14 @@ export default function SettingsPage() {
     const res = await window.api.settings.pickDbFolder()
     if (res.success && res.data) {
       setDbPath(res.data)
-      await window.api.settings.set({ db_network_path: res.data })
+      await window.api.settings.set({ db_network_path: res.data, actor: currentActor() } as any)
     }
   }
 
   // Create user
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault()
-    await window.api.users.create(userForm)
+    await window.api.users.create({ ...userForm, actor: currentActor() })
     setShowUserModal(false)
     setUserForm({ name: '', email: '', password: '', role: 'store_manager', department_ids: [], branch_ids: [] })
     load()
@@ -245,7 +249,7 @@ export default function SettingsPage() {
 
   const handleDeleteUser = async (id: number) => {
     if (id === currentUser?.id) return
-    await window.api.users.delete(id)
+    await window.api.users.delete({ id, actor: currentActor() } as any)
     setUsers((prev) => prev.filter((u) => u.id !== id))
   }
 
@@ -416,6 +420,11 @@ export default function SettingsPage() {
         </section>
       </RoleGuard>
 
+      {/* ─── Credential Encryption ─── */}
+      <RoleGuard minRole="super_admin">
+        <SecuritySection />
+      </RoleGuard>
+
       {/* ─── AI, Calendar & Webhooks ─── */}
       <RoleGuard minRole="super_admin">
         <IntegrationsSection />
@@ -534,7 +543,7 @@ export default function SettingsPage() {
                   disabled={smtpSaving}
                   onClick={async () => {
                     setSmtpSaving(true)
-                    await window.api.settings.set(smtpForm)
+                    await window.api.settings.set({ ...smtpForm, actor: currentActor() } as any)
                     setSmtpSaving(false)
                     setSmtpMsg('Settings saved!')
                     setTimeout(() => setSmtpMsg(''), 3000)
@@ -626,6 +635,7 @@ export default function SettingsPage() {
                     setDocumensoSaving(true)
                     setDocumensoMsg('')
                     await window.api.settings.set({
+                      actor: currentActor(),
                       documenso_url: documensoUrl,
                       documenso_api_key: documensoApiKey
                     })
@@ -645,6 +655,7 @@ export default function SettingsPage() {
                     setDocumensoMsg('')
                     // Save first so the IPC handler reads the latest values
                     await window.api.settings.set({
+                      actor: currentActor(),
                       documenso_url: documensoUrl,
                       documenso_api_key: documensoApiKey
                     })

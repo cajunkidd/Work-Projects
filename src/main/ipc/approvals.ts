@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { getDb, updateContractStatuses } from '../database'
 import { recordAudit } from '../audit'
+import { requireRole, denied } from '../authz'
 import { notifyApprovalRequested, notifyApprovalDecided } from '../emailNotifier'
 import { dispatchWebhook } from '../webhooks'
 import type {
@@ -137,6 +138,8 @@ export function registerApprovalHandlers(): void {
     ): Promise<IpcResponse<ApprovalRule>> => {
       try {
         const db = getDb()
+        const gate = requireRole(db, payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         if (!payload.approver_user_id && !payload.approver_role) {
           return { success: false, error: 'A rule needs either a named approver or an approver role.' }
         }

@@ -4,6 +4,7 @@ A Windows desktop application for directors and teams to manage company and depa
 
 ## Features
 
+- **Encrypted credentials** — SMTP, Gmail, e-signature, and AI keys sealed with AES-256-GCM behind one team passphrase
 - **AI contract extraction** — reads an uploaded agreement (including scanned PDFs) and pulls out terms, obligations, and risk flags for review
 - **Document vault with full-text search** — files are copied into managed storage and their contents indexed, so search covers what's *inside* every document
 - **Obligation tracking** — deliverables, milestones, SLAs, and compliance duties with owners, due dates, and recurrence
@@ -46,6 +47,22 @@ npm run dev
 
 ### First launch
 On first launch, you'll be prompted to create an Admin account. This is the only time the setup screen appears.
+
+---
+
+## Credential Encryption
+
+By default the app stores integration credentials (SMTP password, Gmail token, Documenso key, Anthropic key) in the database. On a shared network drive that means anyone who can read the drive can read them.
+
+To encrypt them:
+
+1. **Settings → Credential Encryption** → set a passphrase (Super Admin only)
+2. Every stored credential is re-encrypted with AES-256-GCM immediately
+3. On each other workstation, enter the same passphrase once — it's cached in that machine's OS keystore (Windows DPAPI), so it isn't needed again
+
+The passphrase is never written to the database, so copying the `.db` file off the drive yields ciphertext. **There is no recovery** — if the passphrase is lost, the credentials must be re-entered.
+
+While a machine is locked, email sending, Gmail sync, e-signature, and AI extraction are skipped rather than attempted with unreadable credentials. Everything else works normally.
 
 ---
 

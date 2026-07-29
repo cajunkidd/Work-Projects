@@ -11,3 +11,14 @@ export function useActor(): Actor | undefined {
   if (!user) return undefined
   return { id: user.id, name: user.name, role: user.role }
 }
+
+/**
+ * The same value outside a React component, for call sites that aren't hooks.
+ * Main-process handlers re-read the user by id, so this is an identity claim,
+ * not a permission grant.
+ */
+export function currentActor(): Actor | undefined {
+  const user = useAuthStore.getState().user
+  if (!user) return undefined
+  return { id: user.id, name: user.name, role: user.role }
+}

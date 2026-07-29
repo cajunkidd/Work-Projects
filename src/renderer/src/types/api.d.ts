@@ -56,20 +56,20 @@ declare global {
         list: () => Promise<IpcResponse<User[]>>
         create: (payload: any) => Promise<IpcResponse<User>>
         update: (payload: any) => Promise<IpcResponse<void>>
-        delete: (id: number) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
         hasAdmin: () => Promise<IpcResponse<boolean>>
       }
       departments: {
         list: () => Promise<IpcResponse<Department[]>>
-        create: (name: string) => Promise<IpcResponse<Department>>
-        update: (payload: { id: number; name: string }) => Promise<IpcResponse<void>>
-        delete: (id: number) => Promise<IpcResponse<void>>
+        create: (arg: string | { name: string; actor?: any }) => Promise<IpcResponse<Department>>
+        update: (payload: { id: number; name: string; actor?: any }) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
       }
       branches: {
         list: () => Promise<IpcResponse<Branch[]>>
-        create: (payload: { number: number; name: string }) => Promise<IpcResponse<Branch>>
-        update: (payload: { id: number; number?: number; name?: string }) => Promise<IpcResponse<void>>
-        delete: (id: number) => Promise<IpcResponse<void>>
+        create: (payload: { number: number; name: string; actor?: any }) => Promise<IpcResponse<Branch>>
+        update: (payload: { id: number; number?: number; name?: string; actor?: any }) => Promise<IpcResponse<void>>
+        delete: (arg: number | { id: number; actor?: any }) => Promise<IpcResponse<void>>
       }
       budget: {
         list: () => Promise<IpcResponse<Budget[]>>
@@ -77,7 +77,7 @@ declare global {
         summaries: (fiscal_year: number, filter?: { role: string; department_ids: number[]; branch_ids: number[] }) => Promise<IpcResponse<BudgetSummary[]>>
         monthlyList: (opts: { fiscal_year: number; department_id?: number | null; branch_id?: number | null }) => Promise<IpcResponse<MonthlyBudget[]>>
         monthlyUpsert: (payload: MonthlyBudget) => Promise<IpcResponse<void>>
-        monthlyBulkUpsert: (entries: MonthlyBudget[]) => Promise<IpcResponse<void>>
+        monthlyBulkUpsert: (entries: MonthlyBudget[], actor?: any) => Promise<IpcResponse<void>>
         monthlySummary: (opts: { fiscal_year: number; department_id?: number | null; branch_id?: number | null }) => Promise<IpcResponse<MonthlyBudgetSummary[]>>
       }
       contracts: {
@@ -123,11 +123,23 @@ declare global {
       }
       settings: {
         get: () => Promise<IpcResponse<AppSettings>>
-        set: (payload: Partial<AppSettings>) => Promise<IpcResponse<void>>
+        set: (payload: Partial<AppSettings> & { actor?: any }) => Promise<IpcResponse<void>>
         uploadLogo: () => Promise<IpcResponse<string>>
         pickDbFolder: () => Promise<IpcResponse<string>>
         extractColors: (imagePath: string) => Promise<IpcResponse<{ primary: string; secondary: string; palette: string[] }>>
         testEmail: (toEmail: string) => Promise<IpcResponse<void>>
+      }
+      secrets: {
+        status: () => Promise<IpcResponse<{
+          configured: boolean
+          unlocked: boolean
+          encryption_available: boolean
+          stored: number
+          plaintext: number
+        }>>
+        setPassphrase: (payload: { passphrase: string; current?: string; actor?: any }) => Promise<IpcResponse<{ resealed: number }>>
+        unlock: (payload: { passphrase: string }) => Promise<IpcResponse<void>>
+        lock: (payload?: { forget?: boolean }) => Promise<IpcResponse<void>>
       }
       gmail: {
         getAuthUrl: () => Promise<IpcResponse<string>>

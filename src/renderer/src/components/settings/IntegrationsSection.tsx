@@ -5,7 +5,7 @@ import Button from '../ui/Button'
 import Modal from '../ui/Modal'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
-import { useActor } from '../../lib/actor'
+import { useActor, currentActor } from '../../lib/actor'
 import type { AiSettings, CalendarFeedOptions, Webhook, WebhookEvent } from '../../../../shared/types'
 
 const MODEL_OPTIONS = [
@@ -98,7 +98,7 @@ export default function IntegrationsSection() {
     const payload: Record<string, string> = { anthropic_model: model, anthropic_effort: effort }
     if (apiKey.trim()) payload.anthropic_api_key = apiKey.trim()
 
-    const res = await window.api.settings.set(payload as any)
+    const res = await window.api.settings.set({ ...payload, actor } as any)
     if (res.success) {
       setApiKey('')
       await load()
@@ -119,7 +119,7 @@ export default function IntegrationsSection() {
     const res = await window.api.calendar.export(calendarOptions)
     if (res.success && res.data) {
       // Remembering the path lets the daily scheduler keep the feed current.
-      await window.api.settings.set({ calendar_feed_path: res.data.path } as any)
+      await window.api.settings.set({ calendar_feed_path: res.data.path, actor } as any)
       setFeedPath(res.data.path)
       flash(
         setCalendarMessage,

@@ -1,7 +1,8 @@
 import { app, BrowserWindow, ipcMain, protocol, net } from 'electron'
 import path from 'path'
 import { pathToFileURL } from 'url'
-import { initDatabase, updateContractStatuses } from './database'
+import { initDatabase, updateContractStatuses, getDb } from './database'
+import { tryAutoUnlock } from './crypto/secrets'
 import { registerUserHandlers } from './ipc/users'
 import { registerBudgetHandlers } from './ipc/budget'
 import { registerContractHandlers } from './ipc/contracts'
@@ -72,6 +73,11 @@ app.whenReady().then(() => {
 
   // Init database (will use userData path by default)
   initDatabase()
+
+  // Unlock stored credentials if this machine has the passphrase cached.
+  if (tryAutoUnlock(getDb())) {
+    console.log('[secrets] credentials unlocked from the machine keystore')
+  }
 
   // Register all IPC handlers
   registerUserHandlers()

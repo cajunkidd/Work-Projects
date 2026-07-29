@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import fs from 'fs'
 import type Database from 'better-sqlite3'
+import { decryptFromStorage } from '../crypto/secrets'
 import type { ExtractionResult } from '../../shared/types'
 
 /**
@@ -31,7 +32,8 @@ export function getApiKey(db: Database.Database): string | null {
   const row = db
     .prepare(`SELECT value FROM app_settings WHERE key = 'anthropic_api_key'`)
     .get() as { value: string } | undefined
-  return row?.value?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || null
+  const stored = decryptFromStorage(row?.value)
+  return stored?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || null
 }
 
 export function getModel(db: Database.Database): string {

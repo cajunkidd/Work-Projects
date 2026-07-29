@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Card from '../ui/Card'
 import Button from '../ui/Button'
+import { currentActor } from '../../lib/actor'
 import Input from '../ui/Input'
 import Select from '../ui/Select'
 import type { Department, Branch, MonthlyBudget, MonthlyBudgetSummary } from '../../../../shared/types'
@@ -60,7 +61,7 @@ export default function MonthlyBudgetSection({ departments, branches }: Props) {
       month: i + 1,
       amount: parseFloat(a) || 0
     }))
-    const res = await window.api.budget.monthlyBulkUpsert(entries)
+    const res = await window.api.budget.monthlyBulkUpsert(entries, currentActor() as any)
     setSaving(false)
     if (res.success) {
       setMsg('Monthly budgets saved!')

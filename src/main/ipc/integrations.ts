@@ -3,6 +3,7 @@ import fs from 'fs'
 import crypto from 'crypto'
 import { getDb } from '../database'
 import { recordAudit } from '../audit'
+import { requireRole, denied } from '../authz'
 import { dispatchWebhook, signPayload } from '../webhooks'
 import { collectCalendarEvents, renderIcs } from '../calendarFeed'
 import type {
@@ -89,6 +90,8 @@ export function registerIntegrationHandlers(): void {
     ): Promise<IpcResponse<Webhook>> => {
       try {
         const db = getDb()
+        const gate = requireRole(db, payload.actor, 'super_admin')
+        if (denied(gate)) return gate
         if (!payload.name?.trim()) return { success: false, error: 'A webhook needs a name.' }
         if (!/^https?:\/\//i.test(payload.url ?? '')) {
           return { success: false, error: 'The URL must start with http:// or https://' }

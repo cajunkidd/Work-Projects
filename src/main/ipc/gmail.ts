@@ -1,6 +1,7 @@
 import { ipcMain, shell } from 'electron'
 import { google } from 'googleapis'
 import { getDb } from '../database'
+import { encryptForStorage, decryptFromStorage } from '../crypto/secrets'
 import type { IpcResponse } from '../../shared/types'
 
 // NOTE: Replace with your actual Google OAuth credentials from Google Cloud Console
@@ -14,7 +15,15 @@ function getOAuthClient() {
 
 function getSavedToken(): Record<string, string> | null {
   const row = getDb().prepare("SELECT value FROM app_settings WHERE key = 'gmail_token'").get() as any
-  return row ? JSON.parse(row.value) : null
+  if (!row) return null
+  // Null when the token is sealed and this session is locked.
+  const plain = decryptFromStorage(row.value)
+  if (!plain) return null
+  try {
+    return JSON.parse(plain)
+  } catch {
+    return null
+  }
 }
 
 function saveToken(token: Record<string, string>): void {
@@ -22,7 +31,7 @@ function saveToken(token: Record<string, string>): void {
     .prepare(
       "INSERT INTO app_settings (key, value) VALUES ('gmail_token', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
     )
-    .run(JSON.stringify(token))
+    .run(encryptForStorage(getDb(), JSON.stringify(token)))
 }
 
 export function registerGmailHandlers(): void {
