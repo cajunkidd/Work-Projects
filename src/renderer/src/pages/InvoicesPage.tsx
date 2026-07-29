@@ -4,6 +4,7 @@ import { useAuthStore } from '../store/authStore'
 import Card from '../components/ui/Card'
 import Badge from '../components/ui/Badge'
 import Button from '../components/ui/Button'
+import { EmptyState } from '../components/ui'
 import RoleGuard from '../components/layout/RoleGuard'
 import type { Invoice } from '../../../shared/types'
 
@@ -62,20 +63,20 @@ export default function InvoicesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white text-2xl font-bold">Invoices</h1>
-          <p className="text-slate-400 text-sm">{invoices.length} invoices · {discrepancies.length} over budget</p>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-white">Invoices</h1>
+          <p className="mt-1 text-sm text-slate-400">{invoices.length} invoices · {discrepancies.length} over budget</p>
         </div>
         <div className="flex items-center gap-3">
-          {exportMsg && <span className={`text-sm ${exportMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{exportMsg}</span>}
+          {exportMsg && <span className={`animate-fade-in text-sm ${exportMsg.startsWith('Error') ? 'text-red-400' : 'text-emerald-400'}`}>{exportMsg}</span>}
           <Button variant="ghost" onClick={handleExport} disabled={invoices.length === 0}>Export</Button>
           <RoleGuard minRole="admin">
             <div className="flex items-center gap-3">
-              {pollMsg && <span className="text-sm text-slate-300">{pollMsg}</span>}
-              <Button onClick={handlePoll} disabled={polling} variant="secondary">
-                {polling ? 'Polling...' : '🔄 Sync Gmail'}
+              {pollMsg && <span className="animate-fade-in text-sm text-slate-300">{pollMsg}</span>}
+              <Button onClick={handlePoll} loading={polling} variant="secondary">
+                Sync Gmail
               </Button>
             </div>
           </RoleGuard>
@@ -84,18 +85,22 @@ export default function InvoicesPage() {
 
       {/* Discrepancy alert */}
       {discrepancies.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
-          <p className="text-amber-400 font-semibold">⚠ {discrepancies.length} invoice(s) exceed budgeted amount by more than 5%</p>
+        <div className="animate-fade-in-up rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 shadow-[0_0_24px_rgb(245_158_11/0.15)]">
+          <p className="flex items-center gap-2 font-semibold text-amber-400">
+            <Badge variant="warning" pulse>{discrepancies.length}</Badge>
+            invoice(s) exceed budgeted amount by more than 5%
+          </p>
           <p className="text-amber-400/70 text-sm mt-1">Review flagged invoices below</p>
         </div>
       )}
 
       {/* Invoices list */}
-      <div className="space-y-3">
+      <div className="stagger space-y-3">
         {invoices.length === 0 ? (
-          <Card className="text-center py-12">
-            <p className="text-slate-400">No invoices. Connect Gmail in Settings and sync to import vendor billing emails.</p>
-          </Card>
+          <EmptyState
+            title="No invoices yet"
+            description="Connect Gmail in Settings and sync to import vendor billing emails."
+          />
         ) : (
           invoices.map((inv) => {
             const overBudget = inv.budgeted_amount > 0 && inv.amount > inv.budgeted_amount * 1.05
@@ -106,7 +111,7 @@ export default function InvoicesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <p className="text-white font-medium truncate">{inv.subject}</p>
-                      {overBudget && <Badge variant="warning">Over Budget</Badge>}
+                      {overBudget && <Badge variant="warning" pulse>Over Budget</Badge>}
                     </div>
                     <p className="text-slate-400 text-sm">From: {inv.sender}</p>
                     <p className="text-slate-400 text-sm">Received: {inv.received_date}</p>

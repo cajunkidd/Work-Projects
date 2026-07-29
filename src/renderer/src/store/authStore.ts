@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { User, UserRole } from '../../../shared/types'
+import type { User, RoleLike } from '../../../shared/types'
 
 interface AuthState {
   user: User | null
   login: (user: User) => void
   logout: () => void
-  can: (role: UserRole) => boolean
+  can: (role: RoleLike) => boolean
   canAccessDepartment: (department_id: number) => boolean
   canAccessBranch: (branch_id: number) => boolean
 }
@@ -17,7 +17,7 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       login: (user) => set({ user }),
       logout: () => set({ user: null }),
-      can: (minRole: UserRole) => {
+      can: (minRole: RoleLike) => {
         const { user } = get()
         if (!user) return false
         const levels: Record<string, number> = { store_manager: 0, director: 1, super_admin: 2, viewer: 0, editor: 1, admin: 2 }

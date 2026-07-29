@@ -170,11 +170,11 @@ export default function AssetsPage() {
   }, [draft])
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-white text-2xl font-bold">IT Assets</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-white">IT Assets</h1>
           <p className="text-slate-400 text-sm">Track devices per branch location for per-machine contract allocations</p>
         </div>
         <div className="flex items-center gap-3">

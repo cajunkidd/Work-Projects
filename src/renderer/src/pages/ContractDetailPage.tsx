@@ -254,14 +254,14 @@ export default function ContractDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="stagger space-y-6">
       {/* Header */}
       <div className="flex items-start justify-between">
         <div>
           <button onClick={() => navigate('/contracts')} className="text-slate-400 hover:text-white text-sm mb-2 flex items-center gap-1">
             ← Back to Contracts
           </button>
-          <h1 className="text-white text-2xl font-bold">{contract.vendor_name}</h1>
+          <h1 className="font-display text-3xl font-bold tracking-tight text-white">{contract.vendor_name}</h1>
           <div className="flex items-center gap-2 mt-1">
             <Badge variant={contract.status === 'active' ? 'success' : contract.status === 'expiring_soon' ? 'warning' : 'danger'}>
               {contract.status.replace('_', ' ')}
